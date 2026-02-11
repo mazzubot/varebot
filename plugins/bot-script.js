@@ -1,24 +1,35 @@
-import fs from 'fs';
+const handler = async (m, { conn }) => {
+  const jid = m.chat
 
-let handler = async (m, { conn }) => {
-  try {
-    if (!fs.existsSync('./media/sticker/script.webp')) {
-      return await m.reply('❌ File ./media/sticker/script.webp non trovato.');
-    }
-    let buffer = fs.readFileSync('./media/sticker/script.webp');
-    await conn.sendMessage(m.chat, { 
-      sticker: buffer,
-    }, { quoted: m });
-    await m.reply('no.');
-  } catch (err) {
-    console.error(err);
-    await m.reply('❌ Errore nell\'invio dello sticker.');
-  }
-};
+  await conn.sendMessage(
+    jid,
+    {
+      text: `〖 🌸 〗 \`Benvenuto in VareBot!\``,
+      title: '',
+      footer: ``,
+      cards: [
+        {
+          image: { url: 'media/menu/varebot.jpeg' },
+          title: `\`by sam aka vare\``,
+          body: `〖 💫 〗 *Esplora tutte le funzionalità*\n〖 🚀 〗 *Bot sempre aggiornato*\n〖 🌑 〗 *Miglior bot di zozzap*`,
+          footer: '˗ˏˋ ☾ 𝚟𝚊𝚛𝚎𝚋𝚘𝚝 ☽ ˎˊ˗',
+          buttons: [
+            {
+              name: 'cta_url',
+              buttonParamsJson: JSON.stringify({
+                display_text: 'Repo - VareBot',
+                url: 'https://github.com/realvare/varebot'
+              })
+            }
+          ]
+        }
+      ]
+    },
+  { quoted: m }
+  )
+}
 
-handler.help = ['script'];
-handler.tags = ['main'];
-handler.command = ['script'];
-handler.register = true;
-
-export default handler;
+handler.command = ['repositorio', 'repo', 'source', 'sourcecode', 'script']
+handler.tags = ['main']
+handler.help = ['repo']
+export default handler

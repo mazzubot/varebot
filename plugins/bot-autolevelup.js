@@ -1,11 +1,18 @@
 import { canLevelUp, xpRange } from '../lib/levelling.js'
 import { createCanvas, loadImage } from 'canvas'
+import { getRole } from './bot-ruoli.js'
 
 export async function before(m, { conn }) {
     if (!global.db.data.chats[m.chat].autolevelup) return !0
     
     let user = global.db.data.users[m.sender]
-    let before = user.level * 1
+    if (!user) return !0
+    user.level = Number(user.level)
+    if (!Number.isFinite(user.level) || user.level < 0) user.level = 0
+    user.exp = Number(user.exp)
+    if (!Number.isFinite(user.exp) || user.exp < 0) user.exp = 0
+
+    let before = user.level
     
     while (canLevelUp(user.level, user.exp, global.multiplier)) {
         user.level++
@@ -14,6 +21,7 @@ export async function before(m, { conn }) {
     
     if (before !== user.level) {
         try {
+            user.role = getRole(user.level)
             const range = xpRange(user.level, global.multiplier)
             const name = await conn.getName(m.sender)
             
@@ -23,7 +31,7 @@ export async function before(m, { conn }) {
                 profilePic = await conn.profilePictureUrl(m.sender, 'image')
             } catch {
                 
-                profilePic = 'https://i.ibb.co/BKHtdBNp/default-avatar-profile-icon-1280x1280.jpg'
+                profilePic = 'https://i.ibb.co/YrWKV59/varebot-pfp.png'
             }
             
             const width = 1200

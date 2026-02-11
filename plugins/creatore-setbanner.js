@@ -1,7 +1,7 @@
 import fs from 'fs';  
 import path from 'path';  
 
-let handler = async (m, { conn, isRowner }) => {
+let handler = async (m, { conn, isSam }) => {
     let time = global.db.data.users[m.sender].lastmiming + 60000;
     if (new Date - global.db.data.users[m.sender].lastmiming < 60000) {
         return conn.reply(m.chat, `⛄ Devi aspettare ${msToTime(time - new Date())} per poter cambiare la foto del bot.`, m);
@@ -52,7 +52,7 @@ const isImageValid = (buffer) => {
 handler.help = ['setbanner'];
 handler.tags = ['creatore'];
 handler.command = ['setbanner'];
-handler.rowner = true;
+handler.owner = true;
 
 export default handler;
 

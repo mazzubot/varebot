@@ -49,6 +49,10 @@ let cooldowns = {};
 
 let handler = async (m, { conn, args, isPrems, text, participants }) => {
     let user = global.db.data.users[m.sender];
+    user.exp = Number(user.exp)
+    if (!Number.isFinite(user.exp) || user.exp < 0) user.exp = 0
+    user.euro = Number(user.euro)
+    if (!Number.isFinite(user.euro) || user.euro < 0) user.euro = 0
     
     // Verifica se è stato usato il comando "pappone"
     const isModePappone = /^(pappone)$/i.test(m.text.split(' ')[0].replace(/[.!#]/g, ''));
@@ -67,6 +71,10 @@ let handler = async (m, { conn, args, isPrems, text, participants }) => {
 
         let target = global.db.data.users[who];
         if (!target) return m.reply('❌ Questa persona non è nel mio database');
+        target.exp = Number(target.exp)
+        if (!Number.isFinite(target.exp) || target.exp < 0) target.exp = 0
+        target.euro = Number(target.euro)
+        if (!Number.isFinite(target.euro) || target.euro < 0) target.euro = 0
         if (who === m.sender) return m.reply('🤡 Non puoi sfruttare te stesso, genio!');
         
         if (cooldowns[m.sender] && Date.now() - cooldowns[m.sender] < COOLDOWN) {
@@ -195,6 +203,8 @@ function randomRange(min, max) {
 }
 
 function formatNumber(num) {
+    num = Number(num)
+    if (!Number.isFinite(num)) num = 0
     return num.toLocaleString('it-IT');
 }
 

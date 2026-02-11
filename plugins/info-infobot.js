@@ -4,9 +4,10 @@ import speed from 'performance-now'
 let handler = async (m, { conn, usedPrefix }) => {
 
   if (!global.db.data.settings) global.db.data.settings = {}
-  if (!global.db.data.settings[conn.user.jid]) global.db.data.settings[conn.user.jid] = {}
+  const botJid = conn.decodeJid(conn.user.jid);
+  if (!global.db.data.settings[botJid]) global.db.data.settings[botJid] = {}
   
-  let bot = global.db.data.settings[conn.user.jid]
+  let bot = global.db.data.settings[botJid]
   let chat = global.db.data.chats[m.chat]
  
   const status = (val) => {
@@ -18,18 +19,16 @@ let handler = async (m, { conn, usedPrefix }) => {
   }
 
   const funzioni = [
-    ['antiprivato', Boolean(bot.antiprivato)],
-    ['restrizioni', Boolean(bot.restrict)],
-    ['autolettura', Boolean(bot.autoread)],
-    ['subbots', Boolean(bot.jadibotmd)]
-  ]
+    ['blocco privato', Boolean(bot.antiprivato)],
+    ['limite comandi', Boolean(bot.antispambot)],
+    ['autolettura', Boolean(bot.autoread)]
+  ] // da aggiungere tutte le nuove funzioni (o usare un sistema automatizzato idk)
   const statoFunzioni = funzioni
     .map(([nome, val]) => formatRow(nome, val))
     .join('\n')
   let _uptime = process.uptime() * 1000
   let uptime = formatUptime(_uptime)
   let totalreg = Object.keys(global.db.data.users || {}).length
-  let totalStats = Object.values(global.db.data.stats || {}).reduce((total, stat) => total + (stat?.total || 0), 0)
   let totalf = Object.values(global.plugins || {}).filter((v) => v?.help && v?.tags).length
 
   let timestamp = speed()
@@ -42,7 +41,7 @@ let handler = async (m, { conn, usedPrefix }) => {
   try {
     pp = await conn.profilePictureUrl(conn.user.jid, 'image')
   } catch {
-    pp = 'https://i.ibb.co/BKHtdBNp/default-avatar-profile-icon-1280x1280.jpg'
+    pp = './media/menu/menu.jpg'
   }
   let varebot = `
     ⋆｡˚『 🤖 ╭ \`INFO ✧ BOT\` ╯ 』˚｡⋆
@@ -54,7 +53,6 @@ let handler = async (m, { conn, usedPrefix }) => {
 │ 『 ✨ 』 \`Velocità:\` *${latensi.toFixed(4)} ms*
 │ 『 🕐 』 \`Uptime:\` *${uptime}*
 │ 『 🌙 』 \`Modalità:\` *${bot.public ? 'Pubblica' : 'Privata'}*
-│ 『 💎 』 \`Comandi Eseguiti:\` *${toNum(totalStats)}*
 │ 『 👥 』 \`Utenti Registrati:\` *${toNum(totalreg)}*
 │
 │『 ⚙️ 』  *\`Stato Funzioni:\`*
@@ -67,9 +65,9 @@ ${statoFunzioni}
       ...global.fake.contextInfo,
       externalAdReply: {
         title: '      ✧･ﾟ: *✧･ﾟ:* 𝓥𝓪𝓻𝓮𝓫𝓸𝓽 *:･ﾟ✧*:･ﾟ✧',
-        body: `ʙʏ · ѕαм ✦`,
+        body: `                         ʙʏ · ѕαм ✦`,
         thumbnailUrl: pp,
-        sourceUrl: null,
+        sourceUrl: "https://varebot.com", 
         mediaType: 1,
         renderLargerThumbnail: true
       }

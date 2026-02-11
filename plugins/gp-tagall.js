@@ -1,190 +1,174 @@
-import fetch from 'node-fetch';
 import PhoneNumber from 'awesome-phonenumber';
 
 const handler = async (m, { conn, participants, args }) => {
   const messaggio = args.join` `;
+  const more = String.fromCharCode(8206)
+  const readMore = more.repeat(4001)
   const info = messaggio ? `»『 📢 』 \`MESSAGGIO:\` *${messaggio}*` : '';
-  let messaggi = `*─ׄ─ׅ─ׄ『 .𖥔 ݁ ˖🌍── .✦ 』─ׄ─ׅ─ׄ*\n\n${info ? info + '\n' : ''}\n╭  ┄ 𝅄  ۪꒰ \`varebot\` ꒱  ۟   𝅄 ┄\n`;
   
-  if (!global.emojiCache) global.emojiCache = new Map();
-  if (!global.cacheStats) global.cacheStats = { hits: 0, misses: 0, errors: 0 };
-  if (!global.cacheTimestamps) global.cacheTimestamps = new Map();
-  
-  const CACHE_TTL = 5 * 60 * 1000;
-  const now = Date.now();
-  for (const [key, timestamp] of global.cacheTimestamps.entries()) {
-    if (now - timestamp > CACHE_TTL) {
-      global.emojiCache.delete(key);
-      global.cacheTimestamps.delete(key);
-    }
-  }
-  
-  const countryEmojiFallback = {
-    '1': '🇺🇸', '39': '🇮🇹', '33': '🇫🇷', '49': '🇩🇪', '44': '🇬🇧', '34': '🇪🇸', '55': '🇧🇷',
-    '52': '🇲🇽', '54': '🇦🇷', '91': '🇮🇳', '86': '🇨🇳', '81': '🇯🇵', '82': '🇰🇷', '7': '🇷🇺',
-    '90': '🇹🇷', '20': '🇪🇬', '27': '🇿🇦', '61': '🇦🇺', '62': '🇮🇩', '60': '🇲🇾', '65': '🇸🇬',
-    '66': '🇹🇭', '84': '🇻🇳', '63': '🇵🇭', '92': '🇵🇰', '93': '🇦🇫', '98': '🇮🇷', '964': '🇮🇶',
-    '966': '🇸🇦', '971': '🇦🇪', '972': '🇮🇱', '30': '🇬🇷', '31': '🇳🇱', '32': '🇧🇪', '41': '🇨🇭',
-    '43': '🇦🇹', '45': '🇩🇰', '46': '🇸🇪', '47': '🇳🇴', '48': '🇵🇱', '351': '🇵🇹', '358': '🇫🇮',
-    '380': '🇺🇦', '420': '🇨🇿', '421': '🇸🇰', '385': '🇭🇷', '386': '🇸🇮', '387': '🇧🇦',
-    '381': '🇷🇸', '382': '🇲🇪', '383': '🇽🇰', '389': '🇲🇰', '355': '🇦🇱', '359': '🇧🇬',
-    '40': '🇷🇴', '36': '🇭🇺', '216': '🇹🇳'
+  let messaggi = `*─ׄ─ׅ─ׄ『 .𖥔 ݁ ˖🌍── .✦ 』─ׄ─ׅ─ׄ*\n\n${info ? info + '\n' : ''}\n╭  ┄ 𝅄  ۪꒰ *\`varebot\`* ꒱  ۟   𝅄 ┄\n${readMore}`;
+  const aintthistooobvious = {
+    '1': '🇺🇸', '1204': '🇨🇦', '1242': '🇧🇸', '1246': '🇧🇧', '1264': '🇦🇮', '1268': '🇦🇬', 
+    '1284': '🇻🇬', '1340': '🇻🇮', '1345': '🇰🇾', '1441': '🇧🇲', '1473': '🇬🇩', '1649': '🇹🇨', 
+    '1664': '🇲🇸', '1670': '🇲🇵', '1671': '🇬🇺', '1684': '🇦🇸', '1721': '🇸🇽', '1758': '🇱🇨', 
+    '1767': '🇩🇲', '1784': '🇻🇨', '1787': '🇵🇷', '1809': '🇩🇴', '1829': '🇩🇴', '1849': '🇩🇴', 
+    '1868': '🇹🇹', '1869': '🇰🇳', '1876': '🇯🇲', 
+    '20': '🇪🇬', '211': '🇸🇸', '212': '🇲🇦', '213': '🇩🇿', '216': '🇹🇳', '218': '🇱🇾', '220': '🇬🇲', 
+    '221': '🇸🇳', '222': '🇲🇷', '223': '🇲🇱', '224': '🇬🇳', '225': '🇨🇮', '226': '🇧🇫', '227': '🇳🇪', 
+    '228': '🇹🇬', '229': '🇧🇯', '230': '🇲🇺', '231': '🇱🇷', '232': '🇸🇱', '233': '🇬🇭', '234': '🇳🇬', 
+    '235': '🇹🇩', '236': '🇨🇫', '237': '🇨🇲', '238': '🇨🇻', '239': '🇸🇹', '240': '🇬🇶', '241': '🇬🇦', 
+    '242': '🇨🇬', '243': '🇨🇩', '244': '🇦🇴', '245': '🇬🇼', '246': '🇮🇴', '248': '🇸🇨', '249': '🇸🇩', 
+    '250': '🇷🇼', '251': '🇪🇹', '252': '🇸🇴', '253': '🇩🇯', '254': '🇰🇪', '255': '🇹🇿', '256': '🇺🇬', 
+    '257': '🇧🇮', '258': '🇲🇿', '260': '🇿🇲', '261': '🇲🇬', '262': '🇷🇪', '263': '🇿🇼', '264': '🇳🇦', 
+    '265': '🇲🇼', '266': '🇱🇸', '267': '🇧🇼', '268': '🇸🇿', '269': '🇰🇲', '27': '🇿🇦', '290': '🇸🇭', 
+    '291': '🇪🇷', '297': '🇦🇼', '298': '🇫🇴', '299': '🇬🇱', 
+    '30': '🇬🇷', '31': '🇳🇱', '32': '🇧🇪', '33': '🇫🇷', '34': '🇪🇸', '36': '🇭🇺', '39': '🇮🇹', 
+    '350': '🇬🇮', '351': '🇵🇹', '352': '🇱🇺', '353': '🇮🇪', '354': '🇮🇸', '355': '🇦🇱', '356': '🇲🇹', 
+    '357': '🇨🇾', '358': '🇫🇮', '359': '🇧🇬', '370': '🇱🇹', '371': '🇱🇻', '372': '🇪🇪', '373': '🇲🇩', 
+    '374': '🇦🇲', '375': '🇧🇾', '376': '🇦🇩', '377': '🇲🇨', '378': '🇸🇲', '379': '🇻🇦', '380': '🇺🇦', 
+    '381': '🇷🇸', '382': '🇲🇪', '383': '🇽🇰', '385': '🇭🇷', '386': '🇸🇮', '387': '🇧🇦', '389': '🇲🇰', 
+    '40': '🇷🇴', '41': '🇨🇭', '420': '🇨🇿', '421': '🇸🇰', '423': '🇱🇮', '43': '🇦🇹', '44': '🇬🇧', 
+    '45': '🇩🇰', '46': '🇸🇪', '47': '🇳🇴', '48': '🇵🇱', '49': '🇩🇪', 
+    '500': '🇫🇰', '501': '🇧🇿', '502': '🇬🇹', '503': '🇸🇻', '504': '🇭🇳', '505': '🇳🇮', '506': '🇨🇷', 
+    '507': '🇵🇦', '508': '🇵🇲', '509': '🇭🇹', '51': '🇵🇪', '52': '🇲🇽', '53': '🇨🇺', '54': '🇦🇷', 
+    '55': '🇧🇷', '56': '🇨🇱', '57': '🇨🇴', '58': '🇻🇪', '590': '🇬🇵', '591': '🇧🇴', '592': '🇬🇾', 
+    '593': '🇪🇨', '594': '🇬🇫', '595': '🇵🇾', '596': '🇲🇶', '597': '🇸🇷', '598': '🇺🇾', '599': '🇨🇼', 
+    '60': '🇲🇾', '61': '🇦🇺', '62': '🇮🇩', '63': '🇵🇭', '64': '🇳🇿', '65': '🇸🇬', '66': '🇹🇭', 
+    '670': '🇹🇱', '672': '🇳🇫', '673': '🇧🇳', '674': '🇳🇷', '675': '🇵🇬', '676': '🇹🇴', '677': '🇸🇧', 
+    '678': '🇻🇺', '679': '🇫🇯', '680': '🇵🇼', '681': '🇼🇫', '682': '🇨🇰', '683': '🇳🇺', '685': '🇼🇸', 
+    '686': '🇰🇮', '687': '🇳🇨', '688': '🇹🇻', '689': '🇵🇫', '690': '🇹🇰', '691': '🇫🇲', '692': '🇲🇭', 
+    '7': '🇷🇺', '81': '🇯🇵', '82': '🇰🇷', '84': '🇻🇳', '850': '🇰🇵', '852': '🇭🇰', '853': '🇲🇴', 
+    '855': '🇰🇭', '856': '🇱🇦', '86': '🇨🇳', '880': '🇧🇩', '886': '🇹🇼', '90': '🇹🇷', '91': '🇮🇳', 
+    '92': '🇵🇰', '93': '🇦🇫', '94': '🇱🇰', '95': '🇲🇲', '960': '🇲🇻', '961': '🇱🇧', '962': '🇯🇴', 
+    '963': '🇸🇾', '964': '🇮🇶', '965': '🇰🇼', '966': '🇸🇦', '967': '🇾🇪', '968': '🇴🇲', '970': '🇵🇸', 
+    '971': '🇦🇪', '972': '🇮🇱', '973': '🇧🇭', '974': '🇶🇦', '975': '🇧🇹', '976': '🇲🇳', '977': '🇳🇵', 
+    '98': '🇮🇷', '992': '🇹🇯', '993': '🇹🇲', '994': '🇦🇿', '995': '🇬🇪', '996': '🇰🇬', '998': '🇺🇿'
   };
 
-  const getEmojiForNumber = async (phoneNumber, id) => {
-    if (global.emojiCache.has(id) && global.cacheTimestamps.has(id)) {
-      const cacheTime = global.cacheTimestamps.get(id);
-      if (now - cacheTime < CACHE_TTL) {
-        global.cacheStats.hits++;
-        return global.emojiCache.get(id);
-      } else {
-        global.emojiCache.delete(id);
-        global.cacheTimestamps.delete(id);
-      }
-    }
-
-    if (phoneNumber.length < 6 || phoneNumber.length > 15 || isNaN(phoneNumber)) {
-      global.emojiCache.set(id, '🏳️');
-      global.cacheTimestamps.set(id, now);
-      console.warn(`Numero non valido saltato per ${id}: ${phoneNumber}`);
-      return '🏳️';
-    }
-
-    try {
-      const pn = PhoneNumber('+' + phoneNumber);
-      if (!pn.isValid()) {
-        global.emojiCache.set(id, '🏳️');
-        global.cacheTimestamps.set(id, now);
-        console.warn(`Numero non valido per ${id}: ${phoneNumber}`);
-        return '🏳️';
-      }
-      
-      const numero = pn.getNumber('international');
-      const countryCode = pn.getCountryCode();
-      if (countryEmojiFallback[countryCode]) {
-        const emoji = countryEmojiFallback[countryCode];
-        global.emojiCache.set(id, emoji);
-        global.cacheTimestamps.set(id, now);
-        global.cacheStats.hits++;
-        return emoji;
-      }
-      const controller = new AbortController();
-      const timeoutId = setTimeout(() => controller.abort(), 5000);
-      
-      const response = await fetch(
-        `https://delirius-apiofc.vercel.app/tools/country?text=${numero}`,
-        { 
-          signal: controller.signal,
-          headers: { 
-            'User-Agent': 'VareBot/2.5',
-            'Accept': 'application/json',
-            'Cache-Control': 'no-cache'
-          }
+  const getEmojiForNumber = async (phoneNumber) => {
+    if (!phoneNumber || phoneNumber.length < 5 || isNaN(phoneNumber)) return '🏳️';
+    for (let i = 4; i >= 1; i--) {
+        const potentialPrefix = phoneNumber.substring(0, i);
+        if (aintthistooobvious[potentialPrefix]) {
+            return aintthistooobvious[potentialPrefix];
         }
-      );
-      clearTimeout(timeoutId);
-      
-      if (!response.ok) throw new Error(`HTTP ${response.status}`);
-      
-      const json = await response.json();
-      const emoji = json.result?.emoji || '🏳️';
-      global.emojiCache.set(id, emoji);
-      global.cacheTimestamps.set(id, now);
-      global.cacheStats.misses++;
-      
-      return emoji;
-    } catch (error) {
-      console.warn(`Errore API per ${id}:`, error.message);
-      global.cacheStats.errors++;
-      global.emojiCache.set(id, '🏳️');
-      global.cacheTimestamps.set(id, now);
-      return '🏳️';
     }
+    try {
+      const pn = new PhoneNumber('+' + phoneNumber);
+      if (pn.isValid()) {
+         const region = pn.getRegionCode();
+         if (region) {
+            const offset = 127397;
+            return region.toUpperCase().replace(/./g, char => String.fromCodePoint(char.charCodeAt(0) + offset));
+         }
+      }
+    } catch {}
+    return '🏳️';
   };
 
   const BATCH_SIZE = 10;
-  const risultati = [];
-  
-  for (let i = 0; i < participants.length; i += BATCH_SIZE) {
-    const batch = participants.slice(i, i + BATCH_SIZE);
+  const omlfinally = []; 
+  const textLines = [];
+  let targetParticipants = participants;
+  if (!targetParticipants || targetParticipants.length === 0) {
+      try {
+        const meta = await conn.groupMetadata(m.chat);
+        targetParticipants = meta.participants;
+      } catch {}
+  }
+  // Cosi non si tagga piu da solo
+  const botJid = await conn.decodeJid(conn.user?.id || conn.user?.jid || conn.user);
+  for (let i = 0; i < targetParticipants.length; i += BATCH_SIZE) {
+    const batch = targetParticipants.slice(i, i + BATCH_SIZE);
     
     const batchPromises = batch.map(async (mem) => {
-      const decodedJid = conn.decodeJid(mem.id);
-      const [user, server] = decodedJid.split('@');
-      let id = user.split(':')[0];
-      const phoneNumber = user.split(':')[0];
-      let emoji;
-      const isLID = server === 'lid';
-      if (isLID) {
-        emoji = '🏳️';
+      let realJid = '';
+      let originalJid = '';
+      if (typeof mem === 'object') {
+        originalJid = mem.id || mem.jid;
+        if (mem.jid && mem.jid.includes('@s.whatsapp.net')) {
+             realJid = mem.jid;
+        } else if (mem.id && mem.id.includes('@s.whatsapp.net')) {
+             realJid = mem.id;
+        } else {
+             realJid = mem.id || mem.jid;
+        }
       } else {
-        emoji = await getEmojiForNumber(phoneNumber, id);
+        originalJid = mem;
+        realJid = mem;
       }
-      return `${emoji} @${id}`;
+      if (realJid && realJid.includes('@lid')) {
+         const decoded = await conn.decodeJid(realJid);
+         if (decoded && decoded.includes('@s.whatsapp.net')) {
+             realJid = decoded;
+         }
+      }
+      if (botJid && realJid && botJid === realJid) return null;
+      let emoji = '🏳️';
+      let tagJid = '';
+      let displayText = '';
+      if (realJid && realJid.includes('@s.whatsapp.net')) {
+          const phoneNumber = realJid.split('@')[0].replace(/[^0-9]/g, '');
+          emoji = await getEmojiForNumber(phoneNumber);
+          tagJid = realJid; 
+          displayText = `@${phoneNumber}`; 
+      } else {
+          emoji = '👤';
+          tagJid = originalJid;
+          displayText = `@${originalJid.split('@')[0]}`;
+      }
+      return {
+          line: `${emoji} ${displayText}`,
+          jid: tagJid
+      };
     });
 
     const batchResults = await Promise.all(batchPromises);
-    risultati.push(...batchResults);
-    if (i + BATCH_SIZE < participants.length) {
+    batchResults.forEach(res => {
+        if (!res) return;
+        textLines.push(res.line);
+        if (res.jid) omlfinally.push(res.jid);
+    });
+    
+    if (i + BATCH_SIZE < targetParticipants.length) {
       await new Promise(resolve => setTimeout(resolve, 50));
     }
   }
 
   const getGroupData = async () => {
     try {
-      const [groupImg, groupMetadata] = await Promise.all([
-        conn.profilePictureUrl(m.chat, 'image').catch(() => 'https://i.ibb.co/hJW7WwxV/varebot.jpg'),
-        conn.groupMetadata(m.chat)
-      ]);
-      return { 
-        img: groupImg,
-        name: groupMetadata.subject || '',
-        memberCount: participants.length
-      };
+        const img = await conn.profilePictureUrl(m.chat, 'image').catch(() => 'https://i.ibb.co/hJW7WwxV/varebot.jpg');
+        const meta = await conn.groupMetadata(m.chat);
+        return { img, subject: meta.subject || 'Gruppo' };
     } catch {
-      return { 
-        img: 'https://i.ibb.co/hJW7WwxV/varebot.jpg',
-        name: '',
-        memberCount: participants.length
-      };
+        return { img: 'https://i.ibb.co/hJW7WwxV/varebot.jpg', subject: 'Gruppo' };
     }
   };
+  
+  const infoGroup = await getGroupData();
 
-  const groupData = await getGroupData();
-
-  messaggi += risultati.join('\n');
+  messaggi += textLines.join('\n');
   messaggi += `\n╰⸼ ┄ ┄꒰  ׅ୭ *tagall* ୧ ׅ ꒱─ ┄ ⸼`;
-  console.log(`Tagall Cache Stats - Hits: ${global.cacheStats.hits}, Misses: ${global.cacheStats.misses}, Errori: ${global.cacheStats.errors}, Spazio: ${global.emojiCache.size}`);
   
   await conn.sendMessage(m.chat, { 
     text: messaggi,
-    mentions: participants.map(a => conn.decodeJid(a.id)),
-    contextInfo: {
+    mentions: omlfinally, 
+    contextInfo: { 
       externalAdReply: {
-        title: groupData.name,
-        body: `⛧°⋆༺ ${groupData.memberCount} membri ༻⋆°⛧`,
-        thumbnailUrl: groupData.img,
+        title: infoGroup.subject,
+        body: `⛧°⋆༺ ${targetParticipants.length} membri ༻⋆°⛧`,
+        thumbnailUrl: infoGroup.img,
         sourceUrl: '',
         mediaType: 1,
         renderLargerThumbnail: true
       }
     }
   });
-  if (global.emojiCache.size > 500) {
-    const entries = Array.from(global.cacheTimestamps.entries())
-      .sort(([,a], [,b]) => a - b)
-      .slice(0, 100);
-      
-    entries.forEach(([key]) => {
-      global.emojiCache.delete(key);
-      global.cacheTimestamps.delete(key);
-    });
-  }
 };
 
 handler.help = ['tagall'];
 handler.tags = ['gruppo'];
-handler.command = /^(tagall|invoca|menzionatutti|tag)$/i;
+handler.command = /^(tagall|invoca|menzionatutti)$/i;
 handler.admin = true;
 handler.group = true;
 

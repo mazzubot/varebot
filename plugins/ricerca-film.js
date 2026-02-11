@@ -3,7 +3,7 @@ import fetch from 'node-fetch';
 const handler = async (m, { conn, text, usedPrefix, command }) => {
 
   const apiKey = `${global.APIKeys.tmdb}`;
-  const geminiKey = `${global.APIKeys.gemini}`;
+  const geminiKey = `${global.APIKeys.google}`;
   
   if (!apiKey) {
     return conn.reply(m.chat, `ㅤㅤ⋆｡˚『 ╭ \`ERRORE\` ╯ 』˚｡⋆\n╭\n│ 『 ❌ 』 \`API Key:\` *non configurata*\n│ ➤ *Controlla la configurazione*\n*╰⭒─ׄ─ׅ─ׄ─⭒─ׄ─ׅ─ׄ─*`, m);

@@ -17,6 +17,7 @@ const handler = async (m, { conn, args, command, text }) => {
     target = m.quoted.sender
     mention = [target]
   } else {
+    await conn.sendPresenceUpdate('composing', m.chat)
     return conn.reply(m.chat, 'Tagga qualcuno o rispondi a un messaggio per insultarlo!', m)
   }
   let ownerList = []
@@ -37,7 +38,7 @@ const handler = async (m, { conn, args, command, text }) => {
         ? `genera un insulto creativo in italiano usando la parola "${parolaChiave}", massimo 4 righe, mai ripetuto prima. Non usare emoji, sii creativo e divertente.`
         : `genera un insulto pesante in italiano, massimo 4 righe, mai ripetuto prima. Non usare emoji, e sii cattivo e volgare`;
       
-      const res = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${GEMINI_API_KEY}`, {
+      const res = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${GEMINI_API_KEY}`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -57,11 +58,14 @@ const handler = async (m, { conn, args, command, text }) => {
   }
 
   if (isOwner) {
+    await conn.sendPresenceUpdate('composing', m.chat)
     const insulto = await generaInsultoUnico(parolaChiave)
     return conn.reply(m.chat, `Insulto te invece, @${m.sender.replace(/@.+/, '')} ${insulto}`, m, { mentions: [m.sender] })
   }
+  await conn.sendPresenceUpdate('composing', m.chat)
   const insulto = await generaInsultoUnico(parolaChiave)
   if (!insulto) {
+    await conn.sendPresenceUpdate('composing', m.chat)
     return conn.reply(m.chat, 'Errore AI: nessuna risposta valida. Riprova più tardi.', m)
   }
   await conn.reply(m.chat, `@${target.replace(/@.+/, '')} ${insulto}`, m, { mentions: mention })

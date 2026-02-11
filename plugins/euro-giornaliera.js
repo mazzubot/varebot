@@ -3,6 +3,12 @@ const prem = 15;
 
 var handler = async (m, { conn, isPrems }) => {
     let user = global.db.data.users[m.sender];
+    user.exp = Number(user.exp)
+    if (!Number.isFinite(user.exp) || user.exp < 0) user.exp = 0
+    user.euro = Number(user.euro)
+    if (!Number.isFinite(user.euro)) user.euro = 0
+    user.money = Number(user.money)
+    if (!Number.isFinite(user.money)) user.money = 0
     user.streak = user.streak || 0;
 
     let coin = `${pickRandom([5, 6, 7, 9, 10, 15, 20, 25, 30, 35, 40, 45, 50, 55, 60, 65, 70, 75, 80, 85, 90, 95, 99, 100, 110, 120, 130, 600, 1000, 1500])}` * 1;

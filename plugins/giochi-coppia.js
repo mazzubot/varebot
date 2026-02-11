@@ -2,347 +2,345 @@ import fs from 'fs'
 import axios from 'axios'
 import React from 'react'
 import { renderToString } from 'react-dom/server'
+import path from 'path'
 
-// URL per l'avatar di fallback
-const DEFAULT_AVATAR_URL = 'https://i.ibb.co/BKHtdBNp/default-avatar-profile-icon-1280x1280.jpg'
+const varebot = './media/menu/varebot.jpeg'
+const varebotpfp = 'https://i.ibb.co/YrWKV59/varebot-pfp.png'
 
-// Nuova carta a tema romantico con immagini del profilo
+const getBase64Image = (filePath, fallbackUrl) => {
+    try {
+        if (fs.existsSync(filePath)) {
+            const fileData = fs.readFileSync(filePath);
+            const ext = path.extname(filePath).substring(1);
+            return `data:image/${ext === 'svg' ? 'svg+xml' : ext};base64,${fileData.toString('base64')}`;
+        }
+    } catch (e) {
+        console.error(`Impossibile leggere file locale ${filePath}:`, e.message);
+    }
+    return fallbackUrl;
+}
+
+const getLovePhrases = (p, n1, n2) => {
+    if (p <= 10) return [
+        `*${p}%* - Vi odiate. Si vede da Marte.`,
+        `*${p}%* - Meglio se uno dei due cambia pianeta.`,
+        `*${p}%* - C'è più amore tra un vegano e una fiorentina.`,
+        `*${p}%* - Buttatevi nell'umido, separatamente.`
+    ];
+    if (p <= 30) return [
+        `*${p}%* - La noia mortale.`,
+        `*${p}%* - Arido come il deserto. Lasciate perdere.`,
+        `*${p}%* - Siete una barzelletta che non fa ridere.`,
+        `*${p}%* - Friendzone livello: "Sei come un fratello".`
+    ];
+    if (p <= 55) return [
+        `*${p}%* - Forse da ubriachi... ma molto ubriachi.`,
+        `*${p}%* - Ci sono margini di miglioramento (forse).`,
+        `*${p}%* - Una notte e via, e poi blocco su WhatsApp.`,
+        `*${p}%* - Vi mancano un po' di pezzi per funzionare.`
+    ];
+    if (p <= 80) return [
+        `*${p}%* - C'è tensione sessuale nell'aria!`,
+        `*${p}%* - Si prospetta un "Netflix & Chill" interessante.`,
+        `*${p}%* - L'attrazione fisica c'è tutta. Dateci dentro!`,
+        `*${p}%* - Una cena a lume di candela e poi... chissà.`
+    ];
+    if (p < 95) return [
+        `*${p}%* - Chiamate i pompieri! Qui si brucia!`,
+        `*${p}%* - Siete fatti l'uno per l'altra. Che invidia.`,
+        `*${p}%* - Un legame spaziale! Verso l'infinito e oltre!`,
+        `*${p}%* - Esplosivi! Letto, cuore e anima connessi.`
+    ];
+    return [
+        `*100%* - PREPARATE IL MATRIMONIO. ORA.`,
+        `*100%* - La perfezione esiste. Siete voi due.`,
+        `*100%* - Compatibilità assoluta: Sesso Divino e Amore Eterno!`
+    ];
+}
+
+const getRandomPhrase = (percentage, n1, n2) => {
+    const list = getLovePhrases(percentage, n1, n2);
+    return list[Math.floor(Math.random() * list.length)];
+}
+
 const createCoupleCard = (props) => {
-  const { name1, name2, percentage, avatar1, avatar2 } = props
-  const heartColor = percentage >= 50 ? '#FF6B81' : '#9CA3AF'
-  const isHighPercentage = percentage > 80;
+  const { name1, name2, percentage, avatar1, avatar2, backgroundData } = props
+  let barColorStart, barColorEnd;
+  if (percentage < 30) { barColorStart = '#ef4444'; barColorEnd = '#991b1b'; }
+  else if (percentage < 70) { barColorStart = '#f59e0b'; barColorEnd = '#d97706'; }
+  else { barColorStart = '#ec4899'; barColorEnd = '#be185d'; }
 
   return React.createElement('div', {
     style: {
       fontFamily: 'Inter, Arial, sans-serif',
-      width: '800px',
-      height: '450px',
+      width: '600px',
+      height: '400px',
       display: 'flex',
       alignItems: 'center',
       justifyContent: 'center',
-      background: 'linear-gradient(135deg, #2a0845 0%, #6441a5 100%)',
-      color: '#fff',
-      padding: '30px',
-      boxSizing: 'border-box',
       position: 'relative',
-      overflow: 'hidden'
+      overflow: 'hidden',
+      backgroundColor: '#1a1a1a'
     }
   },
-    // Effetto particelle/stelle
     React.createElement('div', {
         style: {
-            position: 'absolute',
-            top: 0,
-            left: 0,
-            width: '100%',
-            height: '100%',
-            backgroundImage: `url('data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" width="10" height="10"><circle cx="1" cy="1" r="1" fill="rgba(255,255,255,0.2)" /><circle cx="5" cy="5" r="1" fill="rgba(255,255,255,0.1)" /><circle cx="9" cy="9" r="1" fill="rgba(255,255,255,0.3)" /></svg>')`,
-            backgroundSize: '10px 10px',
-            opacity: 0.5,
+            position: 'absolute', top: '-20px', left: '-20px', right: '-20px', bottom: '-20px',
+            backgroundImage: `url('${backgroundData}')`,
+            backgroundSize: 'cover',
+            backgroundPosition: 'center',
+            filter: 'blur(7px)',
+            opacity: 0.8,
             zIndex: 1
         }
     }),
-
+    React.createElement('div', {
+        style: {
+            position: 'absolute', top: 0, left: 0, right: 0, bottom: 0,
+            background: 'rgba(0, 0, 0, 0.5)',
+            zIndex: 2
+        }
+    }),
     React.createElement('div', {
       style: {
-        width: '100%',
-        maxWidth: '760px',
+        width: '85%',
+        height: '67%',
         borderRadius: '20px',
-        padding: '30px',
+        padding: '20px',
         background: 'rgba(255, 255, 255, 0.08)',
-        backdropFilter: 'blur(10px)',
-        border: '1px solid rgba(255, 255, 255, 0.1)',
-        boxShadow: '0 20px 50px rgba(0,0,0,0.6)',
+        backdropFilter: 'blur(8px)',
+        border: '1px solid rgba(255, 255, 255, 0.15)',
+        boxShadow: '0 20px 40px rgba(0,0,0,0.6)',
         display: 'flex',
-        gap: '24px',
+        justifyContent: 'space-between',
         alignItems: 'center',
-        zIndex: 2
+        zIndex: 3
       }
     },
-      // Profilo Nome 1
       React.createElement('div', {
-        style: {
-          flex: '0 0 140px',
-          display: 'flex',
-          flexDirection: 'column',
-          alignItems: 'center',
-          gap: '12px'
-        }
+        style: { flex: '0 0 130px', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '10px' }
       },
         React.createElement('div', {
           style: {
-            width: '120px',
-            height: '120px',
-            borderRadius: '50%',
-            background: 'linear-gradient(180deg, #5a4b8e, #3a2e5d)',
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'center',
-            boxShadow: '0 0 20px rgba(255, 255, 255, 0.2), inset 0 0 15px rgba(0,0,0,0.5)',
-            overflow: 'hidden'
+            width: '100px', height: '100px', borderRadius: '50%',
+            border: '3px solid rgba(255,255,255,0.9)',
+            boxShadow: '0 0 15px rgba(255,255,255,0.2)',
+            overflow: 'hidden', background: '#000'
           }
         },
-            // Immagine del profilo
-            React.createElement('img', {
-                src: avatar1,
-                style: {
-                    width: '100%',
-                    height: '100%',
-                    objectFit: 'cover',
-                    borderRadius: '50%'
-                }
-            })
+            React.createElement('img', { src: avatar1, style: { width: '100%', height: '100%', objectFit: 'cover' } })
         ),
-        React.createElement('div', { style: { fontSize: '18px', fontWeight: 'bold', textShadow: '0 0 5px rgba(0,0,0,0.2)' } }, name1)
+        React.createElement('div', { 
+            style: { 
+                fontSize: '16px', fontWeight: 'bold', color: '#fff', textAlign: 'center', 
+                textShadow: '0 2px 2px rgba(0,0,0,0.8)', maxWidth: '130px', 
+                whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis'
+            } 
+        }, name1)
       ),
-
-      // Contenuto centrale
       React.createElement('div', {
-        style: {
-          flex: '1',
-          display: 'flex',
-          flexDirection: 'column',
-          alignItems: 'center',
-          textAlign: 'center'
-        }
+        style: { flex: '1', display: 'flex', flexDirection: 'column', alignItems: 'center', padding: '0 15px' }
       },
         React.createElement('div', {
           style: {
-            fontSize: '48px',
-            fontWeight: '900',
-            background: 'linear-gradient(45deg, #FFD166, #FF99AA)',
-            WebkitBackgroundClip: 'text',
-            WebkitTextFillColor: 'transparent',
-            letterSpacing: '2px',
-            textShadow: '0 0 10px rgba(255, 107, 129, 0.5)',
-            marginBottom: '10px'
+            fontSize: '42px', fontWeight: '900',
+            background: `linear-gradient(to bottom, #fff, ${barColorStart})`,
+            WebkitBackgroundClip: 'text', WebkitTextFillColor: 'transparent',
+            filter: 'drop-shadow(0 0 8px rgba(255,255,255,0.3))',
+            marginBottom: '5px'
           }
-        }, `${name1} ❤ ${name2}`),
-
-        React.createElement('p', {
-          style: { margin: 0, color: '#e0e0e0', fontSize: '15px' }
-        },
-            percentage > 90 ? 'Un legame destinato a durare per sempre!' :
-            percentage > 60 ? 'Un’affinità romantica e inaspettata!' :
-            percentage > 30 ? 'C\'è una scintilla, ma serve un po\' di magia...' :
-            'Il destino ha in serbo altri piani...'
-        ),
-
-        // Barra di progressione a tema
+        }, `${percentage}%`),
         React.createElement('div', {
           style: {
-            marginTop: '25px',
-            width: '100%',
-            height: '25px',
-            background: 'rgba(255,255,255,0.1)',
-            borderRadius: '12px',
-            boxShadow: 'inset 0 0 5px rgba(0,0,0,0.5)',
-            overflow: 'hidden',
-            position: 'relative'
+            width: '100%', height: '24px', background: 'rgba(0,0,0,0.6)',
+            borderRadius: '12px', border: '1px solid rgba(255,255,255,0.1)',
+            overflow: 'hidden', position: 'relative'
           }
         },
           React.createElement('div', {
             style: {
-              width: `${Math.max(0, Math.min(100, percentage))}%`,
-              height: '100%',
-              background: `linear-gradient(90deg, ${isHighPercentage ? '#ff66b2' : '#9CA3AF'}, ${isHighPercentage ? '#ff0066' : '#9CA3AF'})`,
-              transition: 'width .6s ease, box-shadow .6s ease',
-              borderRadius: '12px',
-              boxShadow: isHighPercentage ? '0 0 15px #ff0066' : 'none'
+              width: `${percentage}%`, height: '100%',
+              background: `linear-gradient(90deg, ${barColorStart}, ${barColorEnd})`,
+              boxShadow: `0 0 15px ${barColorStart}`,
+              borderRadius: '12px'
             }
-          }),
-          React.createElement('div', {
-            style: {
-              position: 'absolute',
-              top: '50%',
-              left: '50%',
-              transform: 'translate(-50%, -50%)',
-              fontWeight: '800',
-              fontSize: '20px',
-              color: 'rgba(255, 255, 255, 0.9)',
-              textShadow: '0 0 8px rgba(0,0,0,0.8)'
-            }
-          }, `${percentage}%`)
+          })
         ),
-
       ),
-
-      // Profilo Nome 2
       React.createElement('div', {
-        style: {
-          flex: '0 0 140px',
-          display: 'flex',
-          flexDirection: 'column',
-          alignItems: 'center',
-          gap: '12px'
-        }
+        style: { flex: '0 0 130px', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '10px' }
       },
         React.createElement('div', {
           style: {
-            width: '120px',
-            height: '120px',
-            borderRadius: '50%',
-            background: 'linear-gradient(180deg, #5a4b8e, #3a2e5d)',
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'center',
-            boxShadow: '0 0 20px rgba(255, 255, 255, 0.2), inset 0 0 15px rgba(0,0,0,0.5)',
-            overflow: 'hidden'
+            width: '100px', height: '100px', borderRadius: '50%',
+            border: '3px solid rgba(255,255,255,0.9)',
+            boxShadow: '0 0 15px rgba(255,255,255,0.2)',
+            overflow: 'hidden', background: '#000'
           }
         },
-            // Immagine del profilo
-            React.createElement('img', {
-                src: avatar2,
-                style: {
-                    width: '100%',
-                    height: '100%',
-                    objectFit: 'cover',
-                    borderRadius: '50%'
-                }
-            })
+            React.createElement('img', { src: avatar2, style: { width: '100%', height: '100%', objectFit: 'cover' } })
         ),
-        React.createElement('div', { style: { fontSize: '18px', fontWeight: 'bold', textShadow: '0 0 5px rgba(0,0,0,0.2)' } }, name2)
+        React.createElement('div', { 
+            style: { 
+                fontSize: '16px', fontWeight: 'bold', color: '#fff', textAlign: 'center', 
+                textShadow: '0 2px 2px rgba(0,0,0,0.8)', maxWidth: '130px', 
+                whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis'
+            } 
+        }, name2)
       )
     )
   )
 }
 
 export const generateCoupleImage = async ({ name1, name2, percentage, avatar1, avatar2 }) => {
-  const screenshotoneKey = global.APIKeys?.screenshotone_default
-  if (!screenshotoneKey) {
-    console.warn('ScreenshotOne API key mancante, uso html2canvas locale')
-    throw new Error('API key ScreenshotOne non configurata. Aggiungi global.APIKeys.screenshotone nel config.js')
+  const browserlessKey = global.APIKeys?.browserless
+  if (!browserlessKey) {
+    console.warn('Browserless API key mancante.')
+    throw new Error('API key Browserless non configurata.')
   }
-
+  const backgroundData = getBase64Image(varebot);
   try {
-    const reactElement = createCoupleCard({ name1, name2, percentage, avatar1, avatar2 })
+    const reactElement = createCoupleCard({ name1, name2, percentage, avatar1, avatar2, backgroundData })
     const htmlContent = renderToString(reactElement)
     const fullHtml = `<!DOCTYPE html><html><head><meta charset="utf-8">
-      <style>body{margin:0;padding:0;font-family:Inter,Arial,sans-serif;background:transparent}</style>
+      <style>body{margin:0;padding:0;width:600px;height:400px;overflow:hidden;background:transparent;}</style>
       </head><body>${htmlContent}</body></html>`
 
-    const url = `https://api.screenshotone.com/take?access_key=${encodeURIComponent(screenshotoneKey)}&html=${encodeURIComponent(fullHtml)}&viewport_width=800&viewport_height=450&format=png&full_page=true&device_scale_factor=2`
+    const url = `https://chrome.browserless.io/screenshot?token=${encodeURIComponent(browserlessKey)}`
 
-    const response = await axios.get(url, { 
+    const response = await axios.post(url, {
+      html: fullHtml,
+      options: {
+        type: 'jpeg',
+        quality: 85,
+        fullPage: false
+      },
+      viewport: {
+        width: 600,
+        height: 400
+      }
+    }, {
       responseType: 'arraybuffer',
-      timeout: 25000,
-      validateStatus: status => status === 200
+      timeout: 25000
     })
-
-    const contentType = (response.headers['content-type'] || '').toLowerCase()
-    if (contentType.includes('json')) {
-      const errorText = Buffer.from(response.data).toString('utf8')
-      let parsed = {}
-      try { parsed = JSON.parse(errorText) } catch(e) {}
-      throw new Error(parsed.error_message || parsed.message || 'Errore API sconosciuto')
-    }
 
     return response.data
   } catch (error) {
-    console.error('Errore generateCoupleImage:', error?.response?.data ? 
-      Buffer.from(error.response.data).toString('utf8') : error.message)
-    throw new Error(`Errore generazione immagine: ${error.message}`)
+    console.error('Errore generateCoupleImage:', error.message)
+    throw new Error(`Errore generazione immagine`)
   }
 }
 
-var handler = async (m, { conn, command, text, usedPrefix }) => {
-  let loveText = ''
-  let partner2Jid = null
+var handler = async (m, { conn, text, usedPrefix }) => {
   
   try {
-    const senderName = await (async () => {
-      try { return await conn.getName(m.sender) } catch { return (m.pushName || m.sender.split('@')[0]) }
-    })()
-
-    let name1 = senderName
-    let name2 = null
-
-    if (m.quoted && m.quoted.sender) {
-      partner2Jid = m.quoted.sender
-      try { name2 = await conn.getName(partner2Jid) } catch { name2 = partner2Jid.split('@')[0] }
+    let name1 = ''
+    let name2 = ''
+    let jid1 = m.sender
+    let jid2 = null
+    const safeName = async (jid) => {
+        try { return await conn.getName(jid) } catch { return jid.split('@')[0] }
+    }
+    if (m.quoted) {
+        jid2 = m.quoted.sender
+        name1 = await safeName(jid1)
+        name2 = await safeName(jid2)
+    }
+    else if (m.mentionedJid && m.mentionedJid.length >= 2) {
+        jid1 = m.mentionedJid[0]
+        jid2 = m.mentionedJid[1]
+        name1 = await safeName(jid1)
+        name2 = await safeName(jid2)
+    }
+    else if (m.mentionedJid && m.mentionedJid.length === 1) {
+        jid2 = m.mentionedJid[0]
+        name1 = await safeName(jid1)
+        name2 = await safeName(jid2)
+    }
+    else if (text) {
+        const parts = text.trim().split(/\s+/)
+        if (parts.length >= 2) {
+            name1 = parts[0]
+            name2 = parts.slice(1).join(' ')
+            jid1 = null
+            jid2 = null
+        } else {
+            name1 = await safeName(jid1)
+            name2 = text.trim()
+            jid2 = null
+        }
+    }
+    else {
+        return m.reply(`✨ *Menziona qualcuno o scrivi due nomi!*\nEsempio: *${usedPrefix}coppia @utente*`)
+    }
+    const getAvatar = async (jid) => {
+        if (!jid) return getBase64Image(varebotpfp);
+        try {
+            return await conn.profilePictureUrl(jid, 'image');
+        } catch {
+            return getBase64Image(varebotpfp);
+        }
     }
 
-    if (!name2 && Array.isArray(m.mentionedJid) && m.mentionedJid.length) {
-      partner2Jid = m.mentionedJid[0]
-      try { name2 = await conn.getName(partner2Jid) } catch { name2 = partner2Jid.split('@')[0] }
-    }
+    const avatar1 = await getAvatar(jid1)
+    const avatar2 = await getAvatar(jid2)
 
-    if (!text && !name2) return conn.reply(m.chat, '✨ *Scrivi il nome della persona, menziona o rispondi a un messaggio*', m)
-
-    if (text && !name2) {
-      const parts = text.trim().split(/\s+/)
-      if (parts.length === 1) {
-        name2 = parts[0]
-      } else {
-        name1 = parts.shift()
-        name2 = parts.join(' ')
-      }
-    }
-
-    if (!name2) name2 = 'Amico/a'
-
-    // Recupera gli URL delle foto profilo con fallback
-    const avatar1 = await conn.profilePictureUrl(m.sender, 'image').catch(() => DEFAULT_AVATAR_URL)
-    const avatar2 = await conn.profilePictureUrl(partner2Jid || m.chat, 'image').catch(() => DEFAULT_AVATAR_URL)
-
+    // 3. Calcoli
     let percentage = Math.floor(Math.random() * 101)
+    let captionText = getRandomPhrase(percentage, name1, name2)
 
-    if (percentage < 50) {
-      loveText = `💔 C'è un piccolo intoppo! Sembra che *${name1}* e *${name2}* abbiano solo il *${percentage}%* di affinità. Ma l'amore è un mistero...`
-    } else if (percentage < 100) {
-      loveText = `❤️ Wow, *${name1}* e *${name2}*! Il vostro amore brilla al *${percentage}%*. Un vero colpo di fulmine!`
+    m.reply('🔮 *Consultando gli astri...*')
+    const imageBuffer = await generateCoupleImage({ 
+        name1, name2, percentage, avatar1, avatar2 
+    })
+    let ricalcolaCmd = ''
+    if (jid1 && jid2 && jid1 !== m.sender) {
+        ricalcolaCmd = `${usedPrefix}coppia @${jid1.split('@')[0]} @${jid2.split('@')[0]}`
+    } else if (jid2) {
+        ricalcolaCmd = `${usedPrefix}coppia @${jid1.split('@')[0]} @${jid2.split('@')[0]}`
     } else {
-      loveText = `✨ Un legame magico! *${name1}* e *${name2}* sono anime gemelle, compatibili al *${percentage}%*! Il destino vi unisce.`
+        ricalcolaCmd = `${usedPrefix}coppia ${name1} ${name2}`
     }
 
-    const imageBuffer = await generateCoupleImage({ name1, name2, percentage, avatar1, avatar2 })
-    
     const buttons = [
-      { buttonId: `${usedPrefix}coppia ${name1} ${name2}`, buttonText: { displayText: 'Ricalcola' }, type: 1 }
+      { buttonId: ricalcolaCmd, buttonText: { displayText: 'Ricalcola 🎲' }, type: 1 }
     ]
 
     await conn.sendMessage(m.chat, {
       image: imageBuffer,
-      caption: loveText,
+      caption: captionText,
       footer: 'vare ✧ bot',
       buttons,
-      mentions: conn.parseMention(loveText)
+      mentions: conn.parseMention(captionText + ricalcolaCmd)
     }, { quoted: m })
-
-    if (percentage === 100) {
-      m.reply(`💍 *WOW! ${name1} e ${name2} sono compatibili al 100%!* Volete sposarvi?`, null, { mentions: conn.parseMention(`@${m.sender.split('@')[0]} @${(partner2Jid)?.split('@')[0] || ''}`) })
-      
-      let filter = msg => {
-        let txt = (msg.text || '').toLowerCase()
-        return (txt === 'si' || txt === 'sì') && (msg.sender == m.sender || msg.sender == partner2Jid)
-      }
-      let timeout = 60000
-      let collected = []
-
-      await conn.reply(m.chat, `*${name1}* e *${name2}*, rispondete "sì" per accettare il matrimonio! (60s)`, m)
-
-      while (collected.length < 2) {
-        let res = await conn.awaitMessage(m.chat, filter, timeout).catch(() => null)
-        if (!res) break
-        if (!collected.includes(res.sender)) collected.push(res.sender)
-      }
-
-      if (collected.length === 2) {
-        let file = './sposi.json'
-        let sposi = []
-        if (fs.existsSync(file)) {
-          try { sposi = JSON.parse(fs.readFileSync(file)) } catch { sposi = [] }
-        }
-        sposi.push({ partner1: name1, partner2: name2, date: new Date().toISOString() })
-        fs.writeFileSync(file, JSON.stringify(sposi, null, 2))
-        return conn.reply(m.chat, `💞 *Congratulazioni! ${name1} e ${name2} sono ora ufficialmente sposati!*`, m)
-      } else {
-        return conn.reply(m.chat, `💔 Matrimonio annullato: non entrambi hanno accettato.`, m)
-      }
+    if (percentage === 100 && jid2) {
+       m.reply(`💍 *DESTINO COMPIUTO!* Volete sposarvi? (Scrivete "sì")`, null, { mentions: [jid1, jid2] })
+       
+       let filter = msg => (msg.text?.toLowerCase() === 'si' || msg.text?.toLowerCase() === 'sì') && (msg.sender == jid1 || msg.sender == jid2)
+       let collected = []
+       
+       try {
+           let timeout = Date.now() + 60000
+           while (collected.length < 2 && Date.now() < timeout) {
+               let res = await conn.awaitMessage(m.chat, filter, 60000).catch(() => null)
+               if(res && !collected.includes(res.sender)) collected.push(res.sender)
+           }
+           
+           if (collected.length === 2) {
+                let file = './sposi.json'
+                let sposi = []
+                if (fs.existsSync(file)) try { sposi = JSON.parse(fs.readFileSync(file)) } catch {}
+                sposi.push({ partner1: name1, partner2: name2, date: new Date().toISOString() })
+                fs.writeFileSync(file, JSON.stringify(sposi, null, 2))
+                conn.reply(m.chat, `💞 *VI DICHIARO MARITO E MOGLIE (o quello che siete)!* 🎉`, m)
+           }
+       } catch(e) {
+       }
     }
+
   } catch (e) {
-    console.error('Errore invio immagine coppia:', e)
-    return conn.reply(m.chat, `Errore generazione immagine: ${e.message}\n\n${loveText}`, m)
+    console.error(e)
+    m.reply(`❌ Errore: ${e.message}`)
   }
 }
 

@@ -83,8 +83,8 @@ let handler = async (m, { conn, args, usedPrefix, command }) => {
 }
 
 handler.help = ['ignora @user [durata]', 'unignora @user']
-handler.tags = ['owner']
+handler.tags = ['creatore']
 handler.command = /^(ignora|ignore|blockcmd|mutacmd|unignora|unignore|sblocca|unmutacmd)$/i
-handler.rowner = true
+handler.owner = true
 
 export default handler

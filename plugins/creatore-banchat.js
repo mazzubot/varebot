@@ -7,6 +7,6 @@ let handler = async (m, { conn }) => {
 handler.help = ['banchat']
 handler.tags = ['creatore']
 handler.command = /^banchat$/i
-handler.rowner = true
+handler.owner = true
 
 export default handler

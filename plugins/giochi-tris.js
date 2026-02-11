@@ -165,7 +165,7 @@ async function renderBoard(title, p1, p2, game, status, p1PicUrl, p2PicUrl, show
         }
     }
 
-    const fallbackPic = 'https://i.ibb.co/BKHtdBNp/default-avatar-profile-icon-1280x1280.jpg';
+    const fallbackPic = 'https://i.ibb.co/YrWKV59/varebot-pfp.png';
     let p1Img, p2Img;
     try {
         p1Img = await loadImage(p1PicUrl || fallbackPic);

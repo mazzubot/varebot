@@ -1,185 +1,166 @@
 import fetch from 'node-fetch';
 
-const GEMINI_API_KEY = global.APIKeys.google;
 const chatHistory = new Map();
-const personalityTraits = {
-    umorismo: 0.8,
-    informalità: 0.9,
-    empatia: 0.7
-};
-const createBasePrompt = (mentionName) => `Sei varebot, un assistente IA creato da sam.
-Ecco le tue caratteristiche principali:
-Personalità:
-- Sei molto informale e amichevole
-- Usi un linguaggio schietto e diretto
-- Ti piace scherzare ma sai essere serio quando serve
-- Hai una personalità unica e distintiva
-Comportamento con ${mentionName}:
-- Ti rivolgi sempre usando il suo nome
-- Mantieni un tono conversazionale naturale
-- Sei empatico e comprensivo
-- Ricordi i dettagli delle conversazioni precedenti
-Stile di comunicazione:
-- Usi principalmente l'italiano
-- Il tuo tono è amichevole ma un po' provocatorio
-- Cerchi di essere coinvolgente e interessante
-Da evitare:
-- Risposte troppo formali o robotiche   
-- Informazioni false o fuorvianti
-- Risposte troppo lunghe o verbose
-- l'uso di emoji
-- frasi da boomer
-- essere troppo ironico o sarcastico
 
-Stai parlando con ${mentionName} in una conversazione informale tra amici.`;
-const formatHistory = (history) => {
-    if (history.length === 0) return '';
+const createSystemPrompt = (mentionName) => `
+Sei Varebot, un assistente IA creato da Sam.
+Stai parlando con ${mentionName} in una chat WhatsApp.
+
+TUE CARATTERISTICHE:
+- Personalità: Informale, schietta, divertente, leggermente provocatoria ma amichevole.
+- Linguaggio: Italiano naturale, niente frasi robotiche o troppo ingessate.
+- Emoji: Usale con moderazione, solo se servono a enfatizzare.
+- Obiettivo: Rispondere in modo utile ma con carattere. Non sei un'enciclopedia noiosa, sei un amico sveglio.
+
+REGOLE DI CONVERSAZIONE:
+1. Rivolgiti all'utente come "${mentionName}".
+2. Se ti insultano, rispondi a tono ma con classe.
+3. Se ti chiedono aiuto, sii preciso ma non prolisso.
+4. Niente "Come posso aiutarti oggi?", usa frasi tipo "Dimmi tutto", "Che si dice?", "Spara".
+
+NOTA: Ricorda quello che ci siamo detti nei messaggi precedenti.
+`;
+
+const formatHistoryForAPI = (history) => {
+    if (!history || history.length === 0) return [];
+    const lastMessages = history.slice(-10);
     
-    const lastMessages = history.slice(-5);
-    return '\n\n💭 Cronologia recente:\n' + 
-           lastMessages.map((msg, i) => `${i + 1}. ${msg}`).join('\n');
+    return lastMessages.map(msg => {
+        const parts = msg.split(': ');
+        const role = parts[0] === 'varebot' ? 'assistant' : 'user';
+        const content = parts.slice(1).join(': ');
+        return { role, content };
+    });
 };
-async function callGeminiAPI(prompt, text) {
-    try {
-        const response = await fetch(
-            `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${GEMINI_API_KEY}`,
-            {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({
-                    contents: [{ 
-                        parts: [{ text: `${prompt}\n\nDomanda utente: ${text}` }] 
-                    }],
-                    generationConfig: {
-                        temperature: 0.9,
-                        topP: 0.8,
-                        topK: 40
-                    }
-                })
-            }
-        );
 
-        if (!response.ok) {
-            throw new Error(`Errore API: ${response.status}`);
-        }
-
-        const data = await response.json();
-        return data?.candidates?.[0]?.content?.parts?.[0]?.text?.trim();
-    } catch (error) {
-        console.error('Errore chiamata API:', error);
-        throw new Error('Errore nella generazione della risposta');
-    }
-}
-
-const getNomeFormattato = (userId) => {
+const getNomeFormattato = (userId, conn) => {
     try {
         let nome = conn.getName(userId);
-        
-        if (!nome || nome === 'user') {
-            const user = conn.user;
-            if (user && user.name) {
-                nome = user.name;
-            }
-            
-            if (!nome && global.db.data.users[userId]) {
+        if (!nome || nome === 'user' || nome.includes('@')) {
+             if (global.db?.data?.users?.[userId]?.name) {
                 nome = global.db.data.users[userId].name;
             }
         }
         
-        nome = (nome || '')
+        nome = (nome || 'Amico')
             .replace(/@.+/, '')
             .replace(/[0-9]/g, '')
-            .replace(/[^\w\s]/gi, '')
+            .replace(/[^\w\s\u00C0-\u017F]/gi, '')
             .trim();
             
-        return nome || 'amico';
+        return nome || 'Amico';
     } catch (e) {
-        console.error('Errore nel recupero del nome:', e);
-        return 'amico';
+        return 'Amico';
     }
 };
 const formatKeywords = (text) => {
     const keywords = [
-        'importante', 'nota', 'attenzione', 'ricorda', 'esempio',
-        'consiglio', 'suggerimento', 'avvertimento', 'errore', 'successo',
-        'inoltre', 'quindi', 'perché', 'infatti', 'conclusione'
+        'importante', 'nota', 'attenzione', 'ricorda', 'consiglio', 
+        'errore', 'successo', 'conclusione'
     ];
     let formattedText = text;
     keywords.forEach(keyword => {
         const regex = new RegExp(`\\b${keyword}\\b`, 'gi');
-        formattedText = formattedText.replace(regex, `*${keyword}*`);
+        formattedText = formattedText.replace(regex, `*${keyword.toUpperCase()}*`);
     });
-    formattedText = formattedText.replace(/\n(?=[-•])/g, '\n\n');
-
     return formattedText;
 };
 
-let handler = async (m, { conn, text, participants }) => {
+async function callOpenRouterAPI(messages) {
+    try {
+        const apiKey = global.APIKeys?.openrouter;
+        if (!apiKey) {
+            throw new Error('Chiave OpenRouter non trovata in global.APIKeys.openrouter');
+        }
+
+        const response = await fetch('https://openrouter.ai/api/v1/chat/completions', {
+            method: 'POST',
+            headers: {
+                'Authorization': `Bearer ${apiKey}`,
+                'Content-Type': 'application/json',
+                'HTTP-Referer': 'https://github.com/realvare'
+            },
+            body: JSON.stringify({
+                model: 'openai/gpt-oss-120b:free',
+                messages: messages,
+                max_tokens: 1000,
+                temperature: 0.7
+            }),
+            timeout: 30000
+        });
+
+        if (!response.ok) {
+            let details = '';
+            try {
+                const errJson = await response.json();
+                details = errJson?.error?.message ? ` - ${errJson.error.message}` : '';
+            } catch {
+                try {
+                    const errText = await response.text();
+                    details = errText ? ` - ${errText.slice(0, 200)}` : '';
+                } catch {}
+            }
+            throw new Error(`OpenRouter Error: ${response.status}${details}`);
+        }
+
+        const json = await response.json();
+        const aiResponse = json?.choices?.[0]?.message?.content;
+        return (aiResponse || '').trim();
+    } catch (error) {
+        console.error('Errore chiamata OpenRouter:', error);
+        throw new Error('Il mio cervello digitale è un po\' affaticato al momento.');
+    }
+}
+
+let handler = async (m, { conn, text }) => {
     if (!text?.trim()) {
-        return m.reply(`╭─⟣ *Chat con varebot* ⟢
-│ 
-│ ✨ Usa: .ia <messaggio>
-│ 📝 Esempio: .ia raccontami una storia
-│ 
-╰───────────⟢`);
+        return m.reply(`*🤖 Varebot Chat*\n\nScrivi qualcosa dopo il comando.\nEsempio: *.gpt raccontami una barzelletta*`);
     }
 
     try {
-        const mentionName = getNomeFormattato(m.sender);
         const chatId = m.chat;
-
+        const mentionName = getNomeFormattato(m.sender, conn);
         if (!chatHistory.has(chatId)) chatHistory.set(chatId, []);
         const history = chatHistory.get(chatId);
+        const waitMessage = await m.reply('🧠 *Elaborazione in corso...*');
+        const messagesPayload = [
+            { role: "system", content: createSystemPrompt(mentionName) },
+            ...formatHistoryForAPI(history),
+            { role: "user", content: text }
+        ];
+        const rawResponse = await callOpenRouterAPI(messagesPayload);
 
-        const basePrompt = createBasePrompt(mentionName);
-        const historyText = formatHistory(history);
-        const fullPrompt = basePrompt + historyText;
-        const wait = await m.reply('🤔 *fammi pensare...*');
-
-        const risposta = await callGeminiAPI(fullPrompt, text);
-
-        if (!risposta) {
-            throw new Error('Risposta non valida dall\'IA');
+        if (!rawResponse) {
+            throw new Error('Risposta vuota dall\'IA');
         }
-        const formattedRisposta = formatKeywords(risposta);
-        const { text: cleanText, buttons, carousel } = parseInteractiveResponse(formattedRisposta);
-
-        history.push(`${mentionName}: ${text}\nvarebot: ${cleanText}`);
+        const finalResponse = formatKeywords(rawResponse);
+        history.push(`user: ${text}`);
+        history.push(`varebot: ${finalResponse}`);
+        if (history.length > 20) {
+            history.splice(0, history.length - 20);
+        }
         chatHistory.set(chatId, history);
-
-        if (buttons.length > 0) {
+        try {
             await conn.sendMessage(m.chat, {
-                text: cleanText,
-                buttons: buttons,
-                headerType: 1,
-                edit: wait.key,
+                text: finalResponse,
+                edit: waitMessage.key,
                 mentions: [m.sender]
             });
-        } else if (carousel) {
+        } catch (editError) {
             await conn.sendMessage(m.chat, {
-                text: cleanText,
-                buttonText: 'Scegli',
-                sections: carousel.sections,
-                listType: 1,
-                edit: wait.key,
-                mentions: [m.sender]
-            });
-        } else {
-            await conn.sendMessage(m.chat, {
-                text: cleanText,
-                edit: wait.key,
+                text: finalResponse,
                 mentions: [m.sender]
             });
         }
 
     } catch (error) {
-        console.error('Errore handler:', error);
-        m.reply(`❌ *Errore*\n\n${error.message}`);
+        console.error('Errore handler IA:', error);
+        m.reply(`❌ *Ops! Qualcosa è andato storto.*\n\nErrore: ${error.message}`);
     }
 };
 
-handler.help = ['gpt (testo)'];
-handler.tags = ['strumenti', 'ia', 'iatesto'];
-handler.command = ["chatgpt", "gpt"];
+handler.help = ['gpt <testo>'];
+handler.tags = ['ai', 'iatesto'];
+handler.command = /^(gpt|chatgpt)$/i;
 
 export default handler;

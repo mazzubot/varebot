@@ -1,66 +1,79 @@
-import { totalmem, freemem, cpus } from 'os'
+import os from 'os'
 import process from 'process'
-import speed from 'performance-now'
+import { performance } from 'perf_hooks'
+
 const formatBytes = (bytes) => {
-  const units = ['B', 'KB', 'MB', 'GB', 'TB']
-  let size = bytes
-  let unitIndex = 0
-  while (size >= 1024 && unitIndex < units.length - 1) {
-    size /= 1024
-    unitIndex++
-  }
-  const formatted = parseFloat(size.toFixed(2))
-  return `${formatted} ${units[unitIndex]}`
+    if (bytes === 0) return '0 B'
+    const sizes = ['B', 'KB', 'MB', 'GB', 'TB', 'PB']
+    const i = Math.floor(Math.log(bytes) / Math.log(1024))
+    return `${parseFloat((bytes / Math.pow(1024, i)).toFixed(2))} ${sizes[i]}`
 }
-const cpu = cpus()[0].model
-  .replace(/(TM|CPU|@.*?)|\(.*?\)/gi, '')
-  .replace(/\s+/g, ' ')
-  .trim()
+
+const fancyClock = (ms) => {
+    const d = Math.floor(ms / (1000 * 60 * 60 * 24))
+    const h = Math.floor((ms / (1000 * 60 * 60)) % 24)
+    const m = Math.floor((ms / (1000 * 60)) % 60)
+    const s = Math.floor((ms / 1000) % 60)
+    return [
+        d > 0 ? `${d}g` : '',
+        h > 0 ? `${h}h` : '',
+        m > 0 ? `${m}m` : '',
+        `${s}s`
+    ].filter(Boolean).join(' ')
+}
 
 const handler = async (m, { conn }) => {
-  const p = speed()
-  await conn.sendPresenceUpdate('composing', m.chat)
-  const ping = speed() - p
-  const uptime = fancyClock(process.uptime() * 1000)
-  const ramtot = totalmem()
-  const ramusata = ramtot - freemem()
-  const ramBot = process.memoryUsage().rss
-  const perc = ((ramusata / ramtot) * 100).toFixed(1)
-  const cpuThreads = cpus().length
-  const dlSpeed = (Math.random() * 100 + 50).toFixed(2)
-  const ulSpeed = (Math.random() * 50 + 10).toFixed(2)
+    const old = performance.now()
+    const cpus = os.cpus()
+    const cpuModel = cpus[0].model.trim()
+    const cpuSpeed = cpus[0].speed
+    const cpuCores = cpus.length
+    const totalMem = os.totalmem()
+    const freeMem = os.freemem()
+    const usedMem = totalMem - freeMem
+    const nodeMem = process.memoryUsage().rss
+    const uptime = fancyClock(process.uptime() * 1000)
+    const osUptime = fancyClock(os.uptime() * 1000)
+    const platform = os.platform()
+    const arch = os.arch()
+    const hostname = os.hostname()
+    const loadAvg = os.loadavg().map(v => v.toFixed(2)).join(' | ')
+    const neww = performance.now()
+    const speed = (neww - old).toFixed(2)
 
-  const text = `
-╭─「 🪷 \`SPEED ✧ TEST\` 」─
+    const text = `
+╭─「 『 🎐 』 \`STATO SISTEMA\` 」
 │
-*├* 📡 \`Ping:\` *${ping.toFixed(2)} ms*
-*├* 🕒 \`Uptime:\` *${uptime}*
+├ 『 📡 』 *PING INFO*
+│ >_ \`Velocita Bot:\` *${speed} ms*
 │
-*├* 💾 \`RAM Totale:\` *${formatBytes(ramtot)}*
-*├* 💾 \`RAM Usata:\` *${formatBytes(ramusata)}* (*${perc}%*)
-*├* 🤖 \`RAM Bot:\` *${formatBytes(ramBot)}*
+├ 『 💾 』 *MEMORIA (RAM)*
+│ >_ \`Totale:\` *${formatBytes(totalMem)}*
+│ >_ \`Usata (Sys):\` *${formatBytes(usedMem)}*
+│ >_ \`Libera:\` *${formatBytes(freeMem)}*
+│ >_ \`Usata (Bot):\` *${formatBytes(nodeMem)}*
 │
-*├* ⚙️ \`CPU:\` *${cpu}*
-*├* 🔁 \`Threads:\` *${cpuThreads}*
+├ 『 💻 』 *SPECIFICHE CPU*
+│ >_ \`Modello:\` *${cpuModel}*
+│ >_ \`Core:\` *${cpuCores} Threads*
+│ >_ \`Velocità:\` *${cpuSpeed} MHz*
 │
-*├* 📥 \`Download:\` *${dlSpeed} Mbps*
-*├* 📤 \`Upload:\` *${ulSpeed} Mbps*
+├ 『 ⚙️ 』 *SISTEMA*
+│ >_ \`OS:\` *${platform} (${arch})*
+│ >_ \`Host:\` *${hostname}*
+│ >_ \`NodeJS:\` *${process.version}*
+│ >_ \`Uptime Bot:\` *${uptime}*
+│ >_ \`Uptime Server:\` *${osUptime}*
+│ >_ \`Load Avg:\` *${loadAvg}*
 │
-╰⭑⭒━✦⋆⁺₊✧ \`𝓿𝓪𝓻𝓮𝓫𝓸𝓽\` ✧₊⁺⋆✦━⭒⭑
+╰⭑⭒━✦⋆ \`𝓿𝓪𝓻𝓮𝓫𝓸𝓽\` ⋆✦━⭒⭑
 `.trim()
-  await conn.reply(m.chat, text, m, { ...global.rcanal })
+    await conn.sendPresenceUpdate('composing', m.chat)
+    await conn.reply(m.chat, text, m, { ...global.rcanal })
 }
 
 handler.help = ['speed']
 handler.tags = ['info']
-handler.command = ['speed', 'velocita', 'speedtest']
+handler.command = ['speed', 'info']
 
 export default handler
-
-function fancyClock(ms) {
-  const d = Math.floor(ms / (1000 * 60 * 60 * 24))
-  const h = Math.floor(ms / (1000 * 60 * 60)) % 24
-  const m = Math.floor(ms / (1000 * 60)) % 60
-  const s = Math.floor(ms / 1000) % 60
-  return `${d}g ${h}o ${m}m ${s}s`
-}

@@ -1,87 +1,122 @@
-import youtubedl from 'youtube-dl-exec'
+import { exec } from 'child_process'
+import { promisify } from 'util'
 import fs from 'fs'
 import path from 'path'
 import ytSearch from 'yt-search'
 
-const videoInfoCache = new Map()
+const execPromise = promisify(exec)
+const vic = new Map()
 const CACHE_TTL = 15 * 60 * 1000
-const A = [
-    '251',
-    '140',
-    '250',
-    '249',
-    '139',
-    'bestaudio[ext=webm]/bestaudio[ext=m4a]/bestaudio',
-    'best[height<=720][ext=mp4]/best[ext=mp4]'
-]
-const V = [
-    '22',
-    '136+140',
-    '298+140',
-    '135+140',
-    '18',
-    '134+140',
-    'best[height<=1080][ext=mp4]/best[ext=mp4]/best[height<=720]'
-]
+const gonnabealongyr = 20 * 60
+const A = [ 'bestaudio[ext=m4a]/bestaudio', '251', '140', 'bestaudio', 'best[height<=480]' ]
+const V = [ '135+140', '134+140', '136+140', '137+140',  /* Sti ultimi due hanno la maggior qualita ma pesano asf */]
 const tmpDir = path.join(process.cwd(), 'temp')
 if (!fs.existsSync(tmpDir)) {
     fs.mkdirSync(tmpDir)
 }
 
-async function download(url, options) {
-    const opts = {
-        noWarnings: true,
-        noCheckCertificate: true,
-        preferFreeFormats: false,
-        socketTimeout: 30,
-        retries: 5,
-        forceIpv4: true,
-        addHeader: ['referer:youtube.com', 'user-agent:googlebot'],
-        concurrentFragments: 10,
-        noPlaylist: true
-    }
-    if (options.format) opts.format = options.format
-    if (options.output) opts.output = options.output
-    if (options.extractAudio) {
-        opts.extractAudio = true
-        if (options.audioFormat) opts.audioFormat = options.audioFormat
-        if (options.audioQuality) opts.audioQuality = options.audioQuality
-        opts.keepVideo = false
-    }
-    if (options.maxFilesize) opts.maxFilesize = options.maxFilesize
-    if (options.cookies) opts.cookies = options.cookies
-    return await youtubedl(url, opts)
+function parseDurationToSeconds(duration) {
+    if (!duration) return 0;
+    if (typeof duration === 'number') return duration;
+    const parts = duration.toString().split(':').map(Number);
+    if (parts.length === 3) return parts[0] * 3600 + parts[1] * 60 + parts[2];
+    if (parts.length === 2) return parts[0] * 60 + parts[1];
+    return parseInt(duration) || 0;
 }
 
-async function getVideoInfoYtDlExec(url) {
+async function runYtDlp(args) { 
+    const ytdlpCommands = [
+        'yt-dlp',
+        'yt-dlp.exe',
+        'python -m yt_dlp',
+        path.join(process.cwd(), 'yt-dlp.exe'),
+        path.join(process.cwd(), 'node_modules', '.bin', 'yt-dlp'),
+        'python -m yt_dlp',
+        'python3 -m yt_dlp'
+    ];
+    
+    let lastError;
+    
+    for (const cmd of ytdlpCommands) {
+        try {
+            const command = `${cmd} ${args.join(' ')}`;
+            const { stdout, stderr } = await execPromise(command, {
+                maxBuffer: 50 * 1024 * 1024,
+                shell: true
+            });
+            
+            return { stdout, stderr };
+        } catch (error) {
+            lastError = error;
+            continue;
+        }
+    }
+    
+    console.error('[ERROR] yt-dlp not found. Tried:', ytdlpCommands.join(', '));
+    throw new Error('YT_DLP_NOT_FOUND');
+}
+
+async function download(url, outputPath, format, extractAudio = false) {
+    const args = [
+        `"${url}"`,
+        '-f', format,
+        '-o', `"${outputPath}"`,
+        '--no-warnings',
+        '--no-playlist',
+        '--prefer-free-formats',
+        '--user-agent', '"Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36"',
+        '--referer', '"https://www.youtube.com/"',
+    ];
+    
+    if (extractAudio) {
+        args.push('-x');
+        args.push('--audio-format', 'mp3');
+        args.push('--audio-quality', '0');
+        args.push('--embed-thumbnail');
+        args.push('--add-metadata');
+    } else {
+        args.push('--merge-output-format', 'mp4');
+    }
+    
+    await runYtDlp(args);
+}
+
+async function getVideoInfo(url) {
     try {
-        const info = await youtubedl(url, {
-            dumpJson: true,
-            noDownload: true,
-            noWarnings: true
-        })
+        const args = [
+            `"${url}"`,
+            '--dump-json',
+            '--no-warnings',
+            '--no-playlist'
+        ];
+        
+        const { stdout } = await runYtDlp(args);
+        const info = JSON.parse(stdout);
+        
         return {
             title: info.title || 'Video YouTube',
             uploader: info.uploader || info.channel || 'Sconosciuto',
-            duration: info.duration_string || (info.duration ? new Date(info.duration * 1000).toISOString().substr(11, 8) : '?'),
+            duration: info.duration,
             view_count: info.view_count,
             upload_date: info.upload_date,
             thumbnail: info.thumbnail,
             id: info.id,
             webpage_url: info.webpage_url || url
-        }
+        };
     } catch (error) {
-        const videoId = url.match(/(?:youtube\.com\/watch\?v=|youtu\.be\/)([^&\n?#]+)/)?.[1]
+        console.error('[ERROR] Failed to get video info:', error.message);
+        const videoId = url.match(/(?:youtube\.com\/watch\?v=|youtu\.be\/)([^&\n?#]+)/)?.[1];
+        
         return {
             title: 'Video YouTube',
             uploader: 'YouTube',
-            duration: '?',
+            duration: 0,
             view_count: null,
             upload_date: null,
             thumbnail: videoId ? `https://img.youtube.com/vi/${videoId}/maxresdefault.jpg` : null,
             id: videoId,
             webpage_url: url
-        }
+        };
     }
 }
 
@@ -122,13 +157,13 @@ let handler = async (m, { conn, command, text, usedprefix }) => {
         const searchKey = `search_${text.toLowerCase()}`;
         let searchResults = null;
 
-        if (videoInfoCache.has(searchKey) && (Date.now() - videoInfoCache.get(searchKey).timestamp < CACHE_TTL)) {
-            searchResults = videoInfoCache.get(searchKey).data
+        if (vic.has(searchKey) && (Date.now() - vic.get(searchKey).timestamp < CACHE_TTL)) {
+            searchResults = vic.get(searchKey).data;
         } else {
-            const search = await ytSearch(text)
-            if (!search.videos.length) throw '❌ *Nessun risultato trovato!*'
-            searchResults = search.videos.slice(0, 5)
-            videoInfoCache.set(searchKey, { data: searchResults, timestamp: Date.now() })
+            const search = await ytSearch(text);
+            if (!search.videos.length) throw '❌ *Nessun risultato trovato!*';
+            searchResults = search.videos.slice(0, 5);
+            vic.set(searchKey, { data: searchResults, timestamp: Date.now() });
         }
         
         if (command === 'playaudio' || command === 'playvideo') {
@@ -136,7 +171,8 @@ let handler = async (m, { conn, command, text, usedprefix }) => {
             const videoInfo = {
                 title: firstVideo.title || 'Video YouTube',
                 uploader: firstVideo.author?.name || 'Sconosciuto',
-                duration: firstVideo.duration?.timestamp || firstVideo.duration || '?',
+                duration: firstVideo.duration?.seconds || parseDurationToSeconds(firstVideo.duration?.timestamp),
+                duration_string: firstVideo.duration?.timestamp || '?',
                 view_count: firstVideo.views,
                 upload_date: firstVideo.uploadedAt || null,
                 thumbnail: firstVideo.thumbnail || `https://img.youtube.com/vi/${firstVideo.videoId}/maxresdefault.jpg`,
@@ -145,51 +181,54 @@ let handler = async (m, { conn, command, text, usedprefix }) => {
             };
 
             if (videoInfo.id) {
-                videoInfoCache.set(`info_${videoInfo.id}`, { data: videoInfo, timestamp: Date.now() });
+                vic.set(`info_${videoInfo.id}`, { data: videoInfo, timestamp: Date.now() });
+            }
+            
+            if (videoInfo.duration > gonnabealongyr) {
+                await conn.sendMessage(m.chat, { 
+                    text: `『 ⏱️ 』 *Video troppo lungo!*\n> Il limite è di 20 minuti.\n> Durata video: ${videoInfo.duration_string}` 
+                }, { quoted: m });
+                return;
             }
 
-            const title = videoInfo.title.replace(/[<>:"/\\|?*]/g, '_').substring(0, 40);
+            const title = videoInfo.title.replace(/[<>:"/\\|?*]/g, '_').substring(0, 70);
             const author = videoInfo.uploader.substring(0, 25);
             const views = videoInfo.view_count ? parseInt(videoInfo.view_count).toLocaleString() : '?';
-            const duration = videoInfo.duration;
-
-            let uploadDate = '?';
-            if (videoInfo.upload_date) {
-                uploadDate = videoInfo.upload_date;
-            }
-
-            const thumbnailUrl = videoInfo.thumbnail || `https://img.youtube.com/vi/${videoInfo.id}/maxresdefault.jpg`;
 
             const captionMessage = `
 *╭─ׄ✦☾⋆⁺₊✧ 𝓿𝓪𝓻𝓮𝓫𝓸𝓽 ✧₊⁺⋆☽✦─ׅ⭒*
 *├* *\`${title}\`*
 *├* 👤 \`Autore:\` *${author}*
 *├* 👁️ \`Views:\` *${views}*
-*├* ⏱️ \`Durata:\` *${duration}*
-*├* 📅 \`Upload:\` *${uploadDate}*
+*├* ⏱️ \`Durata:\` *${videoInfo.duration_string}*
 *╰⭒─ׄ─ׅ─ׄ─⭒─ׄ─ׅ─ׄ─*
 > \`Download in corso...\``;
+            
             await conn.sendMessage(m.chat, {
-                image: { url: thumbnailUrl },
+                image: { url: videoInfo.thumbnail },
                 caption: captionMessage.trim(),
                 footer: '> \`vare ✧ bot\`',
-                contextInfo: global.fake?.contextInfo
+                contextInfo: global.fake.contextInfo
             }, { quoted: m });
 
             await downloadMedia(m, conn, command, firstVideo.url, prefix, videoInfo, isSearchQuery);
             return;
         }
+        
         const cardsPromises = searchResults.map(async (video, index) => {
-            const duration = video.duration?.timestamp || video.duration || '?';
+            const durationSec = video.duration?.seconds || parseDurationToSeconds(video.duration?.timestamp);
+            const isTooLong = durationSec > gonnabealongyr;
+            const durationStr = video.duration?.timestamp || '?';
+            const durationDisplay = isTooLong ? `⚠️ ${durationStr} (Max 20m)` : durationStr;
+
             const views = video.views?.toLocaleString() || '?';
             const author = video.author?.name || 'Sconosciuto';
-            const thumbnailUrl = video.thumbnail || `https://img.youtube.com/vi/${video.videoId}/maxresdefault.jpg`;
-            const shortTitle = video.title.substring(0, 55) + (video.title.length > 55 ? '...' : '');
+            const shortTitle = video.title.substring(0, 70) + (video.title.length > 70 ? '...' : '');
 
             return {
-                image: { url: thumbnailUrl },
+                image: { url: video.thumbnail },
                 title: `${index + 1}. ${shortTitle}`,
-                body: `『 👤 』 *${author}*\n『 ⏱️ 』 *${duration}* - 『 👁️ 』 *${views}*`,
+                body: `『 👤 』 *${author}*\n『 ⏱️ 』 *${durationDisplay}* - 『 👁️ 』 *${views}*`,
                 footer: `˗ˏˋ ☾ 𝚟𝚊𝚛𝚎𝚋𝚘𝚝 ☽ ˎˊ˗`,
                 buttons: [
                     {
@@ -230,6 +269,7 @@ let handler = async (m, { conn, command, text, usedprefix }) => {
         );
 
     } catch (e) {
+        console.error('[ERROR] Handler failed:', e.message);
         await conn.reply(m.chat, typeof e === 'string' ? e : '❌ *Errore durante la ricerca!*', m);
     } finally {
         await conn.sendPresenceUpdate('paused', m.chat);
@@ -239,212 +279,164 @@ let handler = async (m, { conn, command, text, usedprefix }) => {
 async function downloadMedia(m, conn, command, url, prefix, preloadedVideoInfo = null, isSearchQuery = false) {
     try {
         let videoInfo = preloadedVideoInfo;
-
+        
         if (!videoInfo) {
-            try {
-                const searchResult = await ytSearch(url);
-                if (searchResult && searchResult.videos && searchResult.videos.length > 0) {
-                    const video = searchResult.videos[0];
-                    videoInfo = {
-                        title: video.title || 'Video YouTube',
-                        uploader: video.author?.name || 'Sconosciuto',
-                        duration: video.duration?.timestamp || video.duration || '?',
-                        view_count: video.views,
-                        upload_date: video.uploadedAt || null,
-                        thumbnail: video.thumbnail || `https://img.youtube.com/vi/${video.videoId}/maxresdefault.jpg`,
-                        id: video.videoId,
-                        webpage_url: video.url
-                    };
-                }
-            } catch (error) {
-                console.log(`[ERRORE] yt-search fallito per URL ${url}: ${error.message}`)
+            if (!url.match(/youtube\.com\/watch\?v=|youtu\.be\//)) {
                 try {
-                    videoInfo = await getVideoInfoYtDlExec(url)
-                } catch (ytdlpError) {
-                    console.log(`[ERRORE] fallback ytdlp anche fallito per URL ${url}: ${ytdlpError.message}`)
-                    throw ytdlpError
+                    const searchResult = await ytSearch(url);
+                    if (searchResult?.videos?.length > 0) {
+                        const video = searchResult.videos[0];
+                        videoInfo = {
+                            title: video.title,
+                            uploader: video.author?.name,
+                            duration: video.duration?.seconds || parseDurationToSeconds(video.duration?.timestamp),
+                            thumbnail: video.thumbnail,
+                            id: video.videoId
+                        };
+                    }
+                } catch (err) {
+                    console.warn('[WARN] ytSearch fallback failed:', err.message);
                 }
+            }
+
+            if (!videoInfo) {
+                videoInfo = await getVideoInfo(url);
             }
         }
 
-        if (videoInfo && videoInfo.id) {
-            videoInfoCache.set(`info_${videoInfo.id}`, { data: videoInfo, timestamp: Date.now() });
+        if (videoInfo?.duration) {
+            const durationSec = typeof videoInfo.duration === 'number' 
+                ? videoInfo.duration 
+                : parseDurationToSeconds(videoInfo.duration);
+                
+            if (durationSec > gonnabealongyr) {
+                throw new Error('duration_limit');
+            }
         }
 
-        const cookiesPath = path.join(process.cwd(), 'cookies.txt');
-        const downloadOptions = {
-            maxFilesize: '100M',
-            ...(fs.existsSync(cookiesPath) && { cookies: cookiesPath })
-        };
-
-        const tmpFile = path.join(tmpDir, `${command}_${Date.now()}.${(command === 'playvideo') ? 'mp4' : 'mp3'}`);
-        downloadOptions.output = tmpFile;
+        const ext = (command === 'playvideo') ? 'mp4' : 'mp3';
+        const tmpFile = path.join(tmpDir, `${command}_${Date.now()}.${ext}`);
         
-        if (command === 'play' || command === 'playaudio') {
-            downloadOptions.extractAudio = true;
-            downloadOptions.audioFormat = 'mp3';
-            downloadOptions.audioQuality = '1';
-        }
-
+        const extractAudio = (command === 'play' || command === 'playaudio');
         const formats = (command === 'playvideo') ? V : A;
+        
         let downloaded = false;
         let lastError = null;
-
-        const downloadAttempts = formats.slice(0, 3).map(async (format, index) => {
-            const attemptOptions = { ...downloadOptions, format };
-            const attemptFile = path.join(tmpDir, `${command}_attempt_${index}_${Date.now()}.${(command === 'playvideo') ? 'mp4' : 'mp3'}`);
-            attemptOptions.output = attemptFile;
-
-            if (command === 'play' || command === 'playaudio') {
-                attemptOptions.extractAudio = true;
-                attemptOptions.audioFormat = 'mp3';
-                attemptOptions.audioQuality = '0';
-            } else {
-                delete attemptOptions.extractAudio;
-                delete attemptOptions.audioFormat;
-                delete attemptOptions.audioQuality;
-            }
-
-            try {
-                await download(url, attemptOptions)
-                return { success: true, format, index, file: attemptFile }
-            } catch (error) {
-                fs.unlink(attemptFile).catch(() => {})
-                return { success: false, error, format, index }
-            }
-        });
-
-        try {
-            const results = await Promise.allSettled(downloadAttempts);
-            const successResult = results.find(result =>
-                result.status === 'fulfilled' && result.value.success
-            );
-
-            if (successResult) {
-                downloaded = true
-                try {
-                    fs.renameSync(successResult.value.file, tmpFile)
-                } catch (e) {
-                    console.log(`[PULIZIA] Avviso: Impossibile spostare file tentativo riuscito: ${e.message}`)
-                    await fs.promises.copyFile(successResult.value.file, tmpFile)
-                    fs.unlinkSync(successResult.value.file)
-                }
-                results.forEach((result, idx) => {
-                    try {
-                        if (result.status === 'fulfilled' &&
-                            result.value &&
-                            result.value.success === false &&
-                            result.value.file &&
-                            result.value.file !== successResult.value.file) {
-                            if (fs.existsSync(result.value.file)) {
-                                fs.unlinkSync(result.value.file)
-                            }
-                        }
-                    } catch (e) {
-                        console.log(`[PULIZIA] Avviso: Impossibile eliminare file tentativo ${idx}: ${e.message}`)
-                    }
-                })
-            } else {
-                for (let i = 3; i < formats.length; i++) {
-                    const format = formats[i]
-                    try {
-                        const fallbackOptions = { ...downloadOptions, format }
-
-                        if (command === 'play' || command === 'playaudio') {
-                            fallbackOptions.extractAudio = true
-                            fallbackOptions.audioFormat = 'mp3'
-                            fallbackOptions.audioQuality = '0'
-                        } else {
-                            delete fallbackOptions.extractAudio
-                            delete fallbackOptions.audioFormat
-                            delete fallbackOptions.audioQuality
-                        }
-
-                        await download(url, fallbackOptions)
-                        downloaded = true
-                        break
-                    } catch (err) {
-                        lastError = err
-                    }
-                }
-            }
-        } catch (error) {
-            lastError = error
-            console.log(`[DOWNLOAD] ERRORE - Errore imprevisto durante i tentativi di download: ${error.message}`)
-        }
-
-        if (!downloaded) {
-            console.log(`[DOWNLOAD] FALLITO TOTALE - Tutti i tentativi falliti - Ultimo errore: ${lastError?.message}`)
-        }
-
-        if (!downloaded) {
-            throw new Error(`Download fallito dopo tutti i tentativi. Ultimo errore: ${lastError?.message || 'Sconosciuto'}`);
-        }
-        const buffer = await fs.promises.readFile(tmpFile);
-        await fs.promises.unlink(tmpFile).catch(() => {});
         
-        if (command === 'playvideo') {
-            const fileName = videoInfo ? `${videoInfo.title.replace(/[<>:"/\\|?*]/g, '_').substring(0, 40)}.mp4` : 'video.mp4';
-            const videoButtons = [
-                {
-                    name: 'quick_reply',
-                    buttonParamsJson: JSON.stringify({
-                        display_text: '🎵 Scarica audio',
-                        id: `${prefix}playaudio ${url}`
-                    })
-                }
-            ];
-
-            await conn.sendMessage(m.chat, {
-                video: buffer,
-                mimetype: 'video/mp4',
-                fileName: fileName,
-                caption: `> \`vare ✧ bot\``,
-                footer: '',
-                interactiveButtons: videoButtons,
-                contextInfo: {...global.fake?.contextInfo}
-            }, { quoted: m });
-        } else {
-            const fileName = videoInfo ? `${videoInfo.title.replace(/[<>:"/\\|?*]/g, '_').substring(0, 40)}.mp3` : 'audio.mp3';
-            await conn.sendMessage(m.chat, {
-                audio: buffer,
-                mimetype: 'audio/mpeg',
-                fileName: fileName,
-                ptt: false,
-                contextInfo: {
-                    ...global.fake?.contextInfo,
-                    externalAdReply: {
-                        ...global.fake?.contextInfo?.externalAdReply,
-                        title: videoInfo ? videoInfo.title : 'Audio',
-                        body: '⋆⭑˚₊ 𝓥𝓪𝓻𝓮𝓫𝓸𝓽 ₊˚⭑⋆',
-                        thumbnailUrl: videoInfo ? videoInfo.thumbnail : 'https://img.youtube.com/vi/default/maxresdefault.jpg',
-                        sourceUrl: null,
-                        mediaType: 2,
-                        renderLargerThumbnail: false
+        for (let i = 0; i < formats.length; i++) {
+            const format = formats[i];
+            
+            try {
+                await download(url, tmpFile, format, extractAudio);
+                await new Promise(resolve => setTimeout(resolve, 1500));
+                
+                const files = fs.readdirSync(tmpDir).filter(f => f.startsWith(`${command}_`));
+                let actualFile = tmpFile;
+                
+                if (extractAudio && !fs.existsSync(tmpFile)) {
+                    const mp3File = tmpFile.replace(/\.[^.]+$/, '.mp3');
+                    if (fs.existsSync(mp3File)) {
+                        actualFile = mp3File;
                     }
                 }
-            }, { quoted: m });
+                
+                if (fs.existsSync(actualFile)) {
+                    const stats = fs.statSync(actualFile);
+                    
+                    if (stats.size > 10000) {
+                        const buffer = await fs.promises.readFile(actualFile);
+                        await fs.promises.unlink(actualFile).catch(() => {});
+                        
+                        const safeTitle = videoInfo ? videoInfo.title.replace(/[<>:"/\\|?*]/g, '_').substring(0, 20) : 'media';
+
+                        if (command === 'playvideo') {
+                            await conn.sendMessage(m.chat, {
+                                video: buffer,
+                                mimetype: 'video/mp4',
+                                fileName: `${safeTitle}.mp4`,
+                                caption: `> \`vare ✧ bot\``,
+                                contextInfo: global.fake.contextInfo
+                            }, { quoted: m });
+                        } else {
+                            await conn.sendMessage(m.chat, {
+                                audio: buffer,
+                                mimetype: 'audio/mpeg',
+                                fileName: `${safeTitle}.mp3`,
+                                ptt: false,
+                                contextInfo: {
+                                    ...global.fake.contextInfo,
+                                    externalAdReply: {
+                                        ...global.fake.contextInfo,
+                                        title: `${videoInfo?.title} - ${author?.name}`,
+                                        body: '⋆⭑˚₊ 𝓥𝓪𝓻𝓮𝓫𝓸𝓽 ₊˚⭑⋆',
+                                        thumbnailUrl: videoInfo ? videoInfo.thumbnail : null,
+                                        mediaType: 1,
+                                        renderLargerThumbnail: false,
+                                    }
+                                }
+                            }, { quoted: m });
+                        }
+                        
+                        downloaded = true;
+                        break;
+                    } else {
+                        fs.unlinkSync(actualFile);
+                    }
+                }
+            } catch (err) {
+                console.warn(`[WARN] Format ${format} failed:`, err.message);
+                lastError = err;
+                
+                const files = fs.readdirSync(tmpDir).filter(f => f.startsWith(`${command}_`));
+                files.forEach(f => {
+                    try {
+                        fs.unlinkSync(path.join(tmpDir, f));
+                    } catch {}
+                });
+            }
+            
+            if (i < formats.length - 1 && !downloaded) {
+                await new Promise(resolve => setTimeout(resolve, 2000));
+            }
         }
+
+        if (!downloaded) {
+            console.error('[ERROR] All formats failed');
+            throw new Error('download_failed');
+        }
+        
     } catch (e) {
-        const errorMessage = e.message?.includes('Sign in') ? `${global.errore}` :
-            e.message?.includes('unavailable') ? '『 ❌ 』- \`Video non disponibile\`' :
-            e.message?.includes('private') ? '『 🔒 』- \`Video privato\`' :
-            e.message?.includes('age') ? '『 🔞 』- \`Video con restrizioni di età\`' :
-            e.message?.includes('maxFilesize') ? '『 📁 』- \`File troppo grande (max 100MB)\`' :
-            e.message?.includes('Timeout') || e.message?.includes('timeout') ? '『 ⏱️ 』- \`Timeout - riprova\`' : 
-            e.message?.includes('formats') ? '『 📺 』- \`Formato non supportato - riprova\`' :
-            e.message?.includes('network') ? '『 🌐 』- \`Errore di rete - riprova\`' :
-            '『 ❌ 』- \`Download fallito - riprova con URL diverso\`';
+        console.error('[ERROR] Download media failed:', e.message);
+        
+        let errorMessage = '『 ❌ 』- \`Errore durante il download\`';
+        
+        if (e.message === 'YT_DLP_NOT_FOUND') {
+            errorMessage = `『 ⚠️ 』 *yt-dlp non trovato!*`;
+        } else if (e.message === 'duration_limit') {
+            errorMessage = '『 ⏱️ 』- \`Video troppo lungo! Limite: 20 minuti.\`';
+        } else if (e.message === 'download_failed') {
+            errorMessage = `『 🚫 』 *Download fallito*
+
+Questo video potrebbe:
+- Non essere disponibile nella tua regione
+- Essere limitato per età
+- Richiedere l'accesso`;
+        } else if (e.message?.includes('not found') || e.message?.includes('ENOENT')) {
+            errorMessage = `『 ⚠️ 』 *yt-dlp non trovato!*`;
+        } else if (e.message?.includes('Sign in')) {
+            errorMessage = `${global.errore}`;
+        }
+        
         await conn.reply(m.chat, errorMessage, m);
     }
 }
 
 setInterval(() => {
-    const now = Date.now()
-    for (const [key, value] of videoInfoCache.entries()) {
-        if (now - value.timestamp > CACHE_TTL) videoInfoCache.delete(key)
+    const now = Date.now();
+    for (const [key, value] of vic.entries()) {
+        if (now - value.timestamp > CACHE_TTL) vic.delete(key);
     }
-}, 3 * 60 * 1000)
+}, 3 * 60 * 1000);
 
 handler.help = ['play <nome/url>', 'playaudio <nome/url>', 'playvideo <nome/url>'];
 handler.tags = ['download'];

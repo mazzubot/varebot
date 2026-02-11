@@ -12,7 +12,6 @@ import { FormData } from 'formdata-node';
 const WHATSAPP_GROUP_REGEX = /\bchat\.whatsapp\.com\/([0-9A-Za-z]{20,24})/i;
 const WHATSAPP_CHANNEL_REGEX = /whatsapp\.com\/channel\/([0-9A-Za-z]{20,24})/i;
 const GENERAL_URL_REGEX = /https?:\/\/(?:www\.)?[-a-zA-Z0-9@:%._\+~#=]{1,256}\.[a-zA-Z0-9()]{1,6}\b(?:[-a-zA-Z0-9()@:%_\+.~#?&=]*)/gi;
-
 const SHORT_URL_DOMAINS = [
     'bit.ly', 'tinyurl.com', 't.co', 'short.link', 'shorturl.at',
     'is.gd', 'v.gd', 'goo.gl', 'ow.ly', 'buff.ly',
@@ -26,27 +25,22 @@ const SHORT_URL_DOMAINS = [
     'shrtco.de', 'ulvis.net', 'chilp.it', 'clicky.me',
     'budurl.com', 'po.st', 'shr.lc', 'dub.co'
 ];
-
 const SHORT_URL_REGEX = new RegExp(
     `https?:\\/\\/(?:www\\.)?(?:${SHORT_URL_DOMAINS.map(d => d.replace('.', '\\.')).join('|')})\\/[\\w\\-._~:/?#[\\]@!$&'()*+,;=]*`,
     'gi'
 );
-
 const redirectCache = new Map();
 const CACHE_DURATION = 10 * 60 * 1000;
 const FETCH_TIMEOUT = 10000;
 const MAX_REDIRECTS = 5;
 const MAX_URLS_TO_CHECK = 3;
-
 const HIDDEN_LINK_PATTERNS = [
     /chat[^\w]*whatsapp[^\w]*com/i,
     /whatsapp[^\w]*com[^\w]*(invite|channel)/i,
 ];
-
 const INVISIBLE_CHARS_REGEX = /[\u200b\u200c\u200d\uFEFF]/;
 const BASE64_REGEX = /(?:[A-Za-z0-9+/]{4}){5,}(?:[A-Za-z0-9+/]{2}==|[A-Za-z0-9+/]{3}=)?/g;
 const URL_ENCODED_REGEX = /%[0-9a-fA-F]{2}/;
-
 const REQUEST_HEADERS = {
     'User-Agent': 'varebot/2.5',
     'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
@@ -56,7 +50,6 @@ const REQUEST_HEADERS = {
     'Connection': 'keep-alive',
     'Upgrade-Insecure-Requests': '1'
 };
-
 function isWhatsAppLink(url) {
     return WHATSAPP_GROUP_REGEX.test(url) || WHATSAPP_CHANNEL_REGEX.test(url);
 }
@@ -196,29 +189,75 @@ function cleanupCache() {
 
 setInterval(cleanupCache, CACHE_DURATION);
 
+function unwrapMessageContent(message) {
+    let content = message?.message || message;
+    for (let i = 0; i < 10; i++) {
+        if (content?.ephemeralMessage?.message) {
+            content = content.ephemeralMessage.message;
+            continue;
+        }
+        if (content?.viewOnceMessage?.message) {
+            content = content.viewOnceMessage.message;
+            continue;
+        }
+        if (content?.viewOnceMessageV2?.message) {
+            content = content.viewOnceMessageV2.message;
+            continue;
+        }
+        if (content?.viewOnceMessageV2Extension?.message) {
+            content = content.viewOnceMessageV2Extension.message;
+            continue;
+        }
+        if (content?.documentWithCaptionMessage?.message) {
+            content = content.documentWithCaptionMessage.message;
+            continue;
+        }
+        if (content?.editedMessage?.message) {
+            content = content.editedMessage.message;
+            continue;
+        }
+        break;
+    }
+    return content;
+}
+
+function findFirstMediaMessage(message, { excludeQuoted = false } = {}) {
+    const root = unwrapMessageContent(message);
+    const seen = new Set();
+    const MEDIA_KEYS = new Set(['imageMessage', 'videoMessage', 'stickerMessage']);
+
+    function visit(obj) {
+        if (!obj || typeof obj !== 'object') return null;
+        if (seen.has(obj)) return null;
+        seen.add(obj);
+        if (Buffer.isBuffer(obj)) return null;
+
+        for (const key of Object.keys(obj)) {
+            if (excludeQuoted && key === 'quotedMessage') continue;
+            const value = obj[key];
+            if (MEDIA_KEYS.has(key) && value && typeof value === 'object') {
+                return { node: value, typeKey: key };
+            }
+            if (value && typeof value === 'object') {
+                const hit = visit(value);
+                if (hit) return hit;
+            }
+        }
+        return null;
+    }
+
+    return visit(root);
+}
+
 async function getMediaBuffer(message) {
     try {
-        const msg = message.message?.imageMessage ||
-            message.message?.videoMessage ||
-            message.message?.stickerMessage ||
-            message.message?.extendedTextMessage?.contextInfo?.quotedMessage?.imageMessage ||
-            message.message?.extendedTextMessage?.contextInfo?.quotedMessage?.videoMessage ||
-            message.message?.extendedTextMessage?.contextInfo?.quotedMessage?.stickerMessage;
-            
-        if (!msg) return null;
-        
-        let type;
-        if (msg.mimetype.includes('video')) {
-            type = 'video';
-        } else if (msg.mimetype.includes('sticker')) {
-            type = 'sticker';
-        } else if (msg.mimetype.includes('image')) {
-            type = 'image';
-        } else {
-            return null;
-        }
-        
-        const stream = await downloadContentFromMessage(msg, type);
+        const found = findFirstMediaMessage(message, { excludeQuoted: false });
+        if (!found) return null;
+
+        const { node, typeKey } = found;
+        const type = typeKey === 'videoMessage' ? 'video' : typeKey === 'stickerMessage' ? 'sticker' : 'image';
+
+        const stream = await downloadContentFromMessage(node, type);
         let buffer = Buffer.from([]);
         
         for await (const chunk of stream) {
@@ -327,25 +366,93 @@ async function readQRCode(imageBuffer) {
     return jsqrResult || await readQRCodeWithExternalApi(imageBuffer);
 }
 
+async function scanMediaForQrCode(mediaBuffer, mimeType = '', isAnimated = false) {
+    if (!mediaBuffer) return false;
+
+    try {
+        let bufferToScan = mediaBuffer;
+        const mime = (mimeType || '').toLowerCase();
+
+        if (mime.includes('video')) {
+            const frameBuffer = await extractFrameFromVideo(mediaBuffer);
+            if (!frameBuffer) return false;
+            bufferToScan = frameBuffer;
+        }
+
+        if (mime.includes('sticker') && isAnimated) {
+            return false;
+        }
+
+        const qrData = await readQRCode(bufferToScan);
+        if (!qrData) return false;
+
+        return await containsSuspiciousLink(String(qrData));
+    } catch {
+        return false;
+    }
+}
+
+async function handleViolation(conn, m, reasonMessage, isBotAdmin) {
+    const target = m.sender;
+
+    await conn.sendMessage(m.chat, {
+        text: reasonMessage,
+        mentions: target ? [target] : []
+    }).catch(() => {});
+
+    await conn.sendMessage(m.chat, { delete: m.key }).catch(() => {});
+
+    if (isBotAdmin && target) {
+        await conn.groupParticipantsUpdate(m.chat, [target], 'remove').catch(() => {});
+    }
+}
+
 async function checkForShortUrls(text) {
     if (!text) return false;
     return SHORT_URL_REGEX.test(text);
 }
 
+function extractTextFromMessage(m, excludeQuoted = false) {
+    const texts = [];
+    const seen = new Set();
+    const IGNORED_KEYS = [
+        'fileSha256', 'mediaKey', 'fileEncSha256', 'jpegThumbnail',
+        'participant', 'stanzaId', 'remoteJid', 'id'
+    ];
+
+    function recursiveExtract(obj) {
+        if (!obj || typeof obj !== 'object') return;
+        if (seen.has(obj)) return;
+        seen.add(obj);
+        if (Buffer.isBuffer(obj)) return;
+
+        for (const key in obj) {
+            if (excludeQuoted && key === 'quotedMessage') continue;
+            if (IGNORED_KEYS.includes(key)) continue;
+            const value = obj[key];
+            if (typeof value === 'string' && value.length > 0) {
+                texts.push(value);
+            } else if (typeof value === 'object') {
+                recursiveExtract(value);
+            }
+        }
+    }
+
+    if (m?.text) texts.push(m.text);
+    if (m?.caption) texts.push(m.caption);
+    recursiveExtract(unwrapMessageContent(m));
+
+    return texts.join(' ').replace(/[\s\u200b\u200c\u200d\uFEFF\u2060\u00A0]+/g, ' ').trim();
+}
+
 async function containsSuspiciousLink(text) {
     if (!text) return false;
-    
     if (isWhatsAppLink(text)) return true;
-    
     if (await checkForShortUrls(text)) return true;
-    
     const hasRedirectingUrls = await checkUrlsForRedirects(text);
     if (hasRedirectingUrls) return true;
-    
     if (HIDDEN_LINK_PATTERNS.some(pattern => pattern.test(text))) return true;
-    
     if (INVISIBLE_CHARS_REGEX.test(text)) return true;
-    
     const base64Matches = text.match(BASE64_REGEX);
     if (base64Matches) {
         for (const match of base64Matches) {
@@ -366,230 +473,14 @@ async function containsSuspiciousLink(text) {
     return false;
 }
 
-function extractTextFromMessage(m, excludeQuoted = false) {
-    const texts = [];
-    const addText = (text) => text && texts.push(text);
-    
-    addText(m.text);
-    addText(m.message?.extendedTextMessage?.text);
-    addText(m.message?.imageMessage?.caption);
-    addText(m.message?.videoMessage?.caption);
-    addText(m.message?.audioMessage?.caption);
-    addText(m.message?.documentMessage?.caption);
-    addText(m.message?.stickerMessage?.caption);
-    
-    const contact = m.message?.contactMessage;
-    if (contact) {
-        addText(contact.displayName);
-        addText(contact.vcard);
-    }
-    
-    const location = m.message?.locationMessage;
-    if (location) {
-        addText(location.name);
-        addText(location.address);
-        addText(location.comment);
-        addText(location.url);
-    }
-    
-    addText(m.message?.liveLocationMessage?.caption);
-    
-    const buttonMsg = m.message?.buttonMessage;
-    if (buttonMsg) {
-        addText(buttonMsg.text);
-        addText(buttonMsg.footer);
-        buttonMsg.buttons?.forEach(button => 
-            addText(button.buttonText?.displayText)
-        );
-    }
-    
-    const template = m.message?.templateMessage?.hydratedTemplate;
-    if (template) {
-        addText(template.hydratedContentText);
-        addText(template.hydratedFooterText);
-        template.hydratedButtons?.forEach(button => {
-            addText(button.quickReplyButton?.displayText);
-            addText(button.urlButton?.displayText);
-            addText(button.urlButton?.url);
-        });
-    }
-    
-    const listMsg = m.message?.listMessage;
-    if (listMsg) {
-        addText(listMsg.title);
-        addText(listMsg.description);
-        addText(listMsg.buttonText);
-        addText(listMsg.footerText);
-        listMsg.sections?.forEach(section => {
-            addText(section.title);
-            section.rows?.forEach(row => {
-                addText(row.title);
-                addText(row.description);
-                addText(row.rowId);
-            });
-        });
-    }
-    
-    const interactive = m.message?.interactiveMessage;
-    if (interactive) {
-        addText(interactive.header?.title);
-        addText(interactive.header?.subtitle);
-        addText(interactive.body?.text);
-        addText(interactive.footer?.text);
-        interactive.nativeFlowMessage?.buttons?.forEach(button => {
-            addText(button.name);
-            addText(button.buttonParamsJson);
-        });
-    }
-    
-    if (!excludeQuoted && m.message?.extendedTextMessage?.contextInfo) {
-        const contextInfo = m.message.extendedTextMessage.contextInfo;
-        
-        const adReply = contextInfo.externalAdReply;
-        if (adReply) {
-            addText(adReply.title);
-            addText(adReply.body);
-            addText(adReply.mediaUrl);
-            addText(adReply.sourceUrl);
-            addText(adReply.previewType);
-            addText(adReply.thumbnailUrl);
-        }
-        
-        const quoted = contextInfo.quotedMessage;
-        if (quoted) {
-            addText(quoted.conversation);
-            addText(quoted.extendedTextMessage?.text);
-            addText(quoted.imageMessage?.caption);
-            addText(quoted.videoMessage?.caption);
-            addText(quoted.documentMessage?.caption);
-            addText(quoted.audioMessage?.caption);
-            addText(quoted.contactMessage?.displayName);
-            addText(quoted.contactMessage?.vcard);
-        }
-        
-        contextInfo.mentionedJid?.forEach(jid => addText(jid));
-    }
-    
-    const pollV3 = m.message?.pollCreationMessageV3;
-    if (pollV3) {
-        addText(pollV3.name);
-        pollV3.options?.forEach(opt => addText(opt.optionName));
-    }
-    
-    const poll = m.message?.pollCreationMessage;
-    if (poll) {
-        addText(poll.name);
-        addText(poll.title);
-        poll.options?.forEach(option => addText(option.optionName));
-    }
-    
-    const product = m.message?.productMessage?.product;
-    if (product) {
-        addText(product.title);
-        addText(product.description);
-        addText(product.retailerId);
-        addText(product.url);
-    }
-    
-    const order = m.message?.orderMessage;
-    if (order) {
-        addText(order.itemCount?.toString());
-        addText(order.message);
-    }
-    
-    const invoice = m.message?.invoiceMessage;
-    if (invoice) {
-        addText(invoice.note);
-        addText(invoice.token);
-    }
-    
-    addText(m.message?.reactionMessage?.text);
-    
-    const ephemeral = m.message?.ephemeralMessage?.message;
-    if (ephemeral) {
-        addText(ephemeral.extendedTextMessage?.text);
-        addText(ephemeral.imageMessage?.caption);
-    }
-    
-    const viewOnce = m.message?.viewOnceMessage?.message;
-    if (viewOnce) {
-        addText(viewOnce.imageMessage?.caption);
-        addText(viewOnce.videoMessage?.caption);
-    }
-    
-    return texts
-        .filter(Boolean)
-        .join(' ')
-        .replace(/[\s\u200b\u200c\u200d\uFEFF]+/g, ' ')
-        .trim();
-}
-
-async function handleViolation(conn, m, reasonMessage, isBotAdmin) {
-    const username = m.sender.split('@')[0];
-    const fullMessage = `> ${reasonMessage}\n> L'utente @${username} è stato rimosso.\n\n> \`vare ✧ bot\``;
-    
-    if (!isBotAdmin) {
-        await conn.sendMessage(m.chat, {
-            text: `> 『 ℹ️ 』 \`Non sono un admin.\`\n> Per rimuovere l'utente, rendimi un amministratore.\n\n> \`vare ✧ bot\``
-        }, { quoted: m });
-        return;
-    }
-    
-    try {
-        await conn.groupParticipantsUpdate(m.chat, [m.sender], 'remove');
-        await new Promise(resolve => setTimeout(resolve, 100));
-        await conn.sendMessage(m.chat, { delete: m.key });
-        await new Promise(resolve => setTimeout(resolve, 1000));
-        await conn.sendMessage(m.chat, {
-            text: fullMessage,
-            mentions: [m.sender]
-        });
-    } catch {
-        await conn.sendMessage(m.chat, {
-            text: fullMessage,
-            mentions: [m.sender]
-        });
-    }
-}
-
-async function scanMediaForQrCode(mediaBuffer, mimeType, isAnimated = false) {
-    try {
-        let bufferToScan = mediaBuffer;
-        
-        if (isAnimated || mimeType.startsWith('video')) {
-            const frameBuffer = await extractFrameFromVideo(mediaBuffer);
-            if (!frameBuffer) return false;
-            bufferToScan = frameBuffer;
-        }
-        
-        if (mimeType.startsWith('image') || 
-            mimeType.startsWith('sticker') || 
-            mimeType.startsWith('video')) {
-            const qrData = await readQRCode(bufferToScan);
-            return qrData && await containsSuspiciousLink(qrData);
-        }
-    } catch {}
-    return false;
-}
-
-function isQuoteOnlyMessage(m) {
-    const hasQuote = m.message?.extendedTextMessage?.contextInfo?.quotedMessage;
-    const hasOwnText = m.text && m.text.trim().length > 0;
-    const hasOwnMedia = m.message?.imageMessage || 
-                       m.message?.videoMessage || 
-                       m.message?.stickerMessage;
-    
-    return hasQuote && !hasOwnText && !hasOwnMedia;
-}
-
 function getViolationReason(text) {
     if (isWhatsAppLink(text)) {
-        return 'Link di gruppo/canale WhatsApp rilevato nel testo.';
+        return 'Link di gruppo/canale WhatsApp rilevato.';
     }
     if (SHORT_URL_REGEX.test(text)) {
-        return 'Short URL sospetto rilevato nel testo.';
+        return 'Short URL sospetto rilevato.';
     }
-    return 'Link sospetto rilevato nel testo.';
+    return 'Link sospetto rilevato.';
 }
 
 function getMediaName(mimeType) {
@@ -598,8 +489,44 @@ function getMediaName(mimeType) {
     return 'immagine';
 }
 
-export async function before(m, { conn, isAdmin, isBotAdmin, isOwner, isROwner }) {
-    if (!m.isGroup || isAdmin || isOwner || isROwner || m.fromMe) {
+function hasQuotedMessage(message) {
+    const root = unwrapMessageContent(message);
+    const seen = new Set();
+
+    function visit(obj) {
+        if (!obj || typeof obj !== 'object') return false;
+        if (seen.has(obj)) return false;
+        seen.add(obj);
+        if (Buffer.isBuffer(obj)) return false;
+
+        if (obj?.contextInfo?.quotedMessage) return true;
+
+        for (const key of Object.keys(obj)) {
+            const value = obj[key];
+            if (key === 'quotedMessage' && value && typeof value === 'object') return true;
+            if (value && typeof value === 'object' && visit(value)) return true;
+        }
+        return false;
+    }
+
+    return visit(root);
+}
+
+function isQuoteOnlyMessage(m) {
+    const hasQuote = hasQuotedMessage(m);
+    if (!hasQuote) return false;
+
+    const ownText = extractTextFromMessage(m, true);
+    if (ownText) return false;
+
+    const ownMedia = findFirstMediaMessage(m, { excludeQuoted: true });
+    if (ownMedia) return false;
+
+    return true;
+}
+
+export async function before(m, { conn, isAdmin, isBotAdmin, isOwner, isSam }) {
+    if (!m.isGroup || isAdmin || isOwner || isSam || m.fromMe) {
         return false;
     }
 
@@ -607,7 +534,6 @@ export async function before(m, { conn, isAdmin, isBotAdmin, isOwner, isROwner }
     if (!chat?.antiLink) {
         return false;
     }
-
     if (isQuoteOnlyMessage(m)) {
         return false;
     }
@@ -624,11 +550,6 @@ export async function before(m, { conn, isAdmin, isBotAdmin, isOwner, isROwner }
         let currentIsBotAdmin = isBotAdmin;
         if (groupMetadata) {
             const participants = groupMetadata.participants;
-            const normalizedParticipants = participants.map(u => {
-                const normalizedId = conn.decodeJid(u.id);
-                return { ...u, id: normalizedId, jid: u.jid || normalizedId };
-            });
-
             const normalizedBot = conn.decodeJid(conn.user.jid);
             const normalizedOwner = groupMetadata.owner ? conn.decodeJid(groupMetadata.owner) : null;
             const normalizedOwnerLid = groupMetadata.ownerLid ? conn.decodeJid(groupMetadata.ownerLid) : null;
@@ -646,27 +567,24 @@ export async function before(m, { conn, isAdmin, isBotAdmin, isOwner, isROwner }
 
         let linkFound = false;
         let reason = '';
-
         const extractedText = extractTextFromMessage(m, true);
 
         if (await containsSuspiciousLink(extractedText)) {
             reason = getViolationReason(extractedText);
             linkFound = true;
         }
+        const foundMedia = !linkFound ? findFirstMediaMessage(m, { excludeQuoted: false }) : null;
 
-        const msgType = m.message?.imageMessage ||
-                       m.message?.videoMessage ||
-                       m.message?.stickerMessage;
-
-        if (!linkFound && msgType) {
+        if (!linkFound && foundMedia) {
             const mediaBuffer = await getMediaBuffer(m);
-            const isAnimated = msgType.mimetype?.includes('sticker') &&
-                             msgType.isAnimated === true;
+            const msgType = foundMedia.node;
+            const mime = msgType?.mimetype || '';
+            const isAnimated = mime.includes('sticker') && msgType.isAnimated === true;
 
-            if (mediaBuffer && await scanMediaForQrCode(mediaBuffer, msgType.mimetype, isAnimated)) {
+            if (mediaBuffer && await scanMediaForQrCode(mediaBuffer, mime, isAnimated)) {
                 linkFound = true;
-                const mediaName = getMediaName(msgType.mimetype);
-                reason = `QR code con link di gruppo/canale WhatsApp rilevato in ${mediaName}.`;
+                const mediaName = getMediaName(mime);
+                reason = `QR code con link rilevato in ${mediaName}.`;
             }
         }
 

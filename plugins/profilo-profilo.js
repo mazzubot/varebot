@@ -1,4 +1,4 @@
-import PhoneNumber from 'awesome-phonenumber'
+import axios from 'axios'
 import fs from 'fs'
 import path from 'path'
 
@@ -8,6 +8,28 @@ const loadMarriages = () => {
         return JSON.parse(fs.readFileSync(marriagesFile, 'utf-8'))
     } else {
         return {}
+    }
+}
+
+const lastfmdb = path.resolve('media/database/lastfm_users.json')
+const loadLastfmDB = () => {
+    try {
+        if (!fs.existsSync(lastfmdb)) return {}
+        return JSON.parse(fs.readFileSync(lastfmdb, 'utf-8'))
+    } catch {
+        return {}
+    }
+}
+
+async function alo(method, params) {
+    const apiKey = global.APIKeys?.lastfm
+    if (!apiKey) return null
+    try {
+        const query = new URLSearchParams({ method, api_key: apiKey, format: 'json', ...params })
+        const res = await axios.get(`https://ws.audioscrobbler.com/2.0/?${query}`, { timeout: 10000 })
+        return res.data
+    } catch {
+        return null
     }
 }
 
@@ -150,14 +172,14 @@ const shouldSendBirthdayMessage = (userId) => {
     return true
 }
 
-let handler = async (m, { conn, args, usedPrefix }) => {
+let handler = async (m, { conn }) => {
     let who = m.quoted?.sender || m.mentionedJid?.[0] || m.sender
     let user = global.db.data.users[who]
     
     if (!user.profile) user.profile = {}
     if (!user.firstTime) user.firstTime = Date.now()
     
-    let pp = await conn.profilePictureUrl(who, 'image').catch(_ => 'https://i.ibb.co/BKHtdBNp/default-avatar-profile-icon-1280x1280.jpg')
+    let pp = await conn.profilePictureUrl(who, 'image').catch(_ => 'https://i.ibb.co/YrWKV59/varebot-pfp.png')
 
     let currentLevel = user.level || calculateLevel(user.exp || 0)
 
@@ -166,7 +188,7 @@ let handler = async (m, { conn, args, usedPrefix }) => {
 
     const marriages = loadMarriages()
     
-    let partnerMention = 'Single'
+    let partnerMention = 'Nessuno'
     let mentions = [who]
 
     if (marriages[who]) {
@@ -175,51 +197,71 @@ let handler = async (m, { conn, args, usedPrefix }) => {
         mentions.push(partnerJid)
     }
 
+    let orachesifa = ''
+    let npl = ''
+    try {
+        const lastfmDB = loadLastfmDB()
+        const lastfmUser = lastfmDB?.[who]
+        if (lastfmUser && global.APIKeys?.lastfm) {
+            const res = await alo('user.getrecenttracks', { user: lastfmUser, limit: 1 })
+            const track = res?.recenttracks?.track?.[0]
+            const isNowPlaying = track?.['@attr']?.nowplaying === 'true'
+            const artist = track?.artist?.['#text']
+            const name = track?.name
+            if (isNowPlaying && artist && name) {
+                orachesifa = `│  『 🎧 』 \`Ora ascolta:\``
+                npl = `“ ${artist} ✧ ${name} „`
+            }
+        }
+    } catch {
+        orachesifa = ''
+        npl = ''
+    }
+
     let profileBox = `ㅤㅤ⋆｡˚『 ╭ \`STATISTICHE\` ╯ 』˚｡⋆
 ╭
 │  『 🪙 』 \`Euro:\` *${formatNumber(user.euro || 0)} 💰*
 │  『 🏅 』 \`Livello:\` *${currentLevel}*
 │  『 ✨』  \`Exp:\` *${formatNumber(user.exp || 0)} XP*
 │  『 💎 』 \`Premium:\` *${user.premium ? '✅' : '❌'}*
-│  『 💬 』 \`Messaggi gruppo:\` *${formatNumber(groupRank.messages)}*
+${orachesifa ? `${orachesifa}\n│      *⤷* *${npl}*` : ''}\n│  『 💬 』 \`Messaggi gruppo:\` *${formatNumber(groupRank.messages)}*
 │  『 🏆 』 \`Rank gruppo:\` *#${groupRank.rank}${groupRank.total > 0 ? '/' + groupRank.total : ''}*
 │  『 🌍 』 \`Rank globale:\` *#${globalRank.rank}${globalRank.total > 0 ? '/' + globalRank.total : ''}*
 │
 *╰⭒─ׄ─ׅ─ׄ─⭒─ׄ─ׅ─ׄ─*
 
-ㅤㅤ⋆｡˚『 ╭ \`INFORMAZIONI\` ╯ 』˚｡⋆
-╭
-${user.profile?.description ? `│  『 📝 』 \`Bio:\`\n│      *⤷*  *${user.profile.description}*` : `│  『 📝 』 \`Bio:\` ?`}
-${user.profile?.gender ? `│  『 ⚧️ 』 \`Genere:\`\n│      *⤷*  *${user.profile.gender}*` : `│  『 ⚧️ 』 \`Genere:\` ?`}
-${user.profile?.instagram ? `│  『 📸 』 \`Instagram:\`\n│      *⤷*  instagram.com/${user.profile.instagram}` : `│  『 📸 』 \`Instagram:\` ?`}
-${user.profile?.city ? `│  『 🌆 』 \`Città:\`\n│      *⤷*  *${user.profile.city}*` : `│  『 🌆 』 \`Città:\` ?`}
-${user.profile?.birthday ? `│  『 🎂 』 \`Compleanno:\`\n│      *⤷*  *${user.profile.birthday}*` : `│  『 🎂 』 \`Compleanno:\` ?`}
-${user.profile?.hobby ? `│  『 🎨 』 \`Hobby:\`\n│      *⤷*  *${user.profile.hobby}*` : `│  『 🎨 』 \`Hobby:\` ?`}
-${user.profile?.status ? `│  『 💝 』 \`Stato:\`\n│      *⤷*  *${user.profile.status}*` : `│  『 💝 』 \`Stato:\` ?`}
-${user.profile?.occupation ? `│  『 💼 』 \`Lavoro:\`\n│      *⤷*  *${user.profile.occupation}*` : `│  『 💼 』 \`Lavoro:\` ?`}
-${user.profile?.music ? `│  『 🎵 』 \`Musica:\`\n│      *⤷*  *${user.profile.music}*` : `│  『 🎵 』 \`Musica:\` ?`}
-${user.profile?.food ? `│  『 🍕 』 \`Cibo:\`\n│      *⤷*  *${user.profile.food}*` : `│  『 🍕 』 \`Cibo:\` ?`}
-${user.profile?.movie ? `│  『 🎬 』 \`Film:\`\n│      *⤷*  *${user.profile.movie}*` : `│  『 🎬 』 \`Film:\` ?`}
-${user.profile?.game ? `│  『 🎮 』 \`Gioco:\`\n│      *⤷*  *${user.profile.game}*` : `│  『 🎮 』 \`Gioco:\` ?`}
-${user.profile?.sport ? `│  『 🏃 』 \`Sport:\`\n│      *⤷*  *${user.profile.sport}*` : `│  『 🏃 』 \`Sport:\` ?`}
-${user.profile?.language ? `│  『 🌍 』 \`Lingua:\`\n│      *⤷*  *${user.profile.language}*` : `│  『 🌍 』 \`Lingua:\` ?`}
-${marriages[who] ? `│  『 💕 』 \`Sposato:\`\n│      *⤷*  ${partnerMention}` : `│  『 💕 』 \`Sposato:\` Single`} 
-│
-*╰⭒─ׄ─ׅ─ׄ─⭒─ׄ─ׅ─ׄ─*`
+> ⋆｡˚『 ╭ \`INFORMAZIONI\` ╯ 』˚｡⋆
+> ╭
+> ${user.profile?.description ? `│  『 📝 』 \`Bio:\`\n│      *⤷*  *${user.profile.description}*` : `│  『 📝 』 \`Bio:\` ?`}
+> ${user.profile?.gender ? `│  『 ⚧️ 』 \`Genere:\`\n│      *⤷*  *${user.profile.gender}*` : `│  『 ⚧️ 』 \`Genere:\` ?`}
+> ${user.profile?.instagram ? `│  『 📸 』 \`Instagram:\`\n│      *⤷*  instagram.com/${user.profile.instagram}` : `│  『 📸 』 \`Instagram:\` ?`}
+> ${user.profile?.city ? `│  『 🌆 』 \`Città:\`\n│      *⤷*  *${user.profile.city}*` : `│  『 🌆 』 \`Città:\` ?`}
+> ${user.profile?.birthday ? `│  『 🎂 』 \`Compleanno:\`\n│      *⤷*  *${user.profile.birthday}*` : `│  『 🎂 』 \`Compleanno:\` ?`}
+> ${user.profile?.hobby ? `│  『 🎨 』 \`Hobby:\`\n│      *⤷*  *${user.profile.hobby}*` : `│  『 🎨 』 \`Hobby:\` ?`}
+> ${user.profile?.status ? `│  『 💝 』 \`Stato:\`\n│      *⤷*  *${user.profile.status}*` : `│  『 💝 』 \`Stato:\` ?`}
+> ${user.profile?.occupation ? `│  『 💼 』 \`Lavoro:\`\n│      *⤷*  *${user.profile.occupation}*` : `│  『 💼 』 \`Lavoro:\` ?`}
+> ${user.profile?.music ? `│  『 🎵 』 \`Musica:\`\n│      *⤷*  *${user.profile.music}*` : `│  『 🎵 』 \`Musica:\` ?`}
+> ${user.profile?.food ? `│  『 🍕 』 \`Cibo:\`\n│      *⤷*  *${user.profile.food}*` : `│  『 🍕 』 \`Cibo:\` ?`}
+> ${user.profile?.movie ? `│  『 🎬 』 \`Film:\`\n│      *⤷*  *${user.profile.movie}*` : `│  『 🎬 』 \`Film:\` ?`}
+> ${user.profile?.game ? `│  『 🎮 』 \`Gioco:\`\n│      *⤷*  *${user.profile.game}*` : `│  『 🎮 』 \`Gioco:\` ?`}
+> ${user.profile?.sport ? `│  『 🏃 』 \`Sport:\`\n│      *⤷*  *${user.profile.sport}*` : `│  『 🏃 』 \`Sport:\` ?`}
+> ${user.profile?.language ? `│  『 🌍 』 \`Lingua:\`\n│      *⤷*  *${user.profile.language}*` : `│  『 🌍 』 \`Lingua:\` ?`}
+> ${marriages[who] ? `│  『 💕 』 \`Sposato:\`\n│      *⤷*  ${partnerMention}` : `│  『 💕 』 \`Sposato:\` No`} 
+> │
+> *╰⭒─ׄ─ׅ─ׄ─⭒─ׄ─ׅ─ׄ─*`
 
     try {
         await conn.sendMessage(m.chat, {
             text: profileBox,
             mentions,
-            contextInfo: {
-                ...global.fake.contextInfo,
+            contextInfo: { ...global.fake.contextInfo,
                 externalAdReply: {
-                    title: `👤 ${await conn.getName(who)}`,
-                    body: `📱 ${PhoneNumber('+' + who.split('@')[0]).getNumber('international')} • Livello ${currentLevel}`,
+                    title: `👤 “ ${await conn.getName(who)} „`,
+                    body: `🎐 ✧ Livello ${currentLevel}`,
                     thumbnailUrl: pp,
                     sourceUrl: '',
                     mediaType: 1,
-                    renderLargerThumbnail: true
+                    renderLargerThumbnail: false
                 }
             }
         }, { quoted: m })

@@ -135,16 +135,16 @@ let handler = async (m, { conn, args, participants, isAdmin, isBotAdmin, usedPre
     let frase = frasi[Math.floor(Math.random() * frasi.length)];
 
     try {
-        let startCaption = `ㅤ⋆｡˚『 ╭ \`${frase}\` ╯ 』˚｡⋆\n╭\n`;
-        startCaption += `│ 『 🏳️ 』 \`Rispondi con il nome\` *della nazione*\n`;
-        startCaption += `│ 『 ⏱️ 』 \`Tempo disponibile:\` *30 secondi*\n`;
+        let startCaption = `ㅤ⋆｡˚『 ╭ \`BANDIERA\` ╯ 』˚｡⋆\n╭\n│ ${frase}\n`;
+        startCaption += `│ 『 🏳️ 』 *Rispondi con il suo nome*\n`;
+        startCaption += `│ 『 ⏱️ 』 \`Tempo:\` *30 secondi*\n`;
         startCaption += `*╰⭒─ׄ─ׅ─ׄ─⭒─ׄ─ׅ─ׄ─*`;
 
         let msg = await conn.sendMessage(m.chat, {
             image: { url: scelta.url },
             caption: startCaption,
             footer: 'vare ✧ bot'
-        }, { quoted: m });
+        }, { contextInfo: global.fake.contextInfo, quoted: m });
         
         global.bandieraGame = global.bandieraGame || {};
         global.bandieraGame[m.chat] = {
@@ -215,8 +215,6 @@ function isAnswerCorrect(userAnswer, correctAnswer) {
 handler.before = async (m, { conn, usedPrefix, command }) => {
     const chat = m.chat;
     const game = global.bandieraGame?.[chat];
-    
-    // Gestione bottoni interattivi
     if (m.message && m.message.interactiveResponseMessage) {
         const response = m.message.interactiveResponseMessage;
         
@@ -268,7 +266,7 @@ handler.before = async (m, { conn, usedPrefix, command }) => {
         global.db.data.users[m.sender].euro = (global.db.data.users[m.sender].euro || 0) + reward;
         global.db.data.users[m.sender].exp = (global.db.data.users[m.sender].exp || 0) + exp;
 
-        let congratsMessage = `ㅤ⋆｡˚『 ╭ \`RISPOSTA CORRETTA!\` ╯ 』˚｡⋆\n╭\n`;
+        let congratsMessage = `ㅤ⋆｡˚『 ╭ \`CORRETTO!\` ╯ 』˚｡⋆\n╭\n`;
         congratsMessage += `│ 『 🏳️ 』 \`Nazione:\` *${game.rispostaOriginale}*\n`;
         congratsMessage += `│ 『 ⏱️ 』 \`Tempo impiegato:\` *${timeTaken}s*\n`;
         congratsMessage += `│ 『 🎁 』 \`Ricompense:\`\n`;
@@ -288,7 +286,7 @@ handler.before = async (m, { conn, usedPrefix, command }) => {
         await conn.reply(chat, '👀 *Ci sei quasi!*', m);
         
     } else if (game.tentativi[m.sender] >= 3) {
-        let failText = `ㅤ⋆｡˚『 ╭ \`TENTATIVI ESAURITI!\` ╯ 』˚｡⋆\n╭\n`;
+        let failText = `ㅤ⋆｡˚『 \`TENTATIVI ESAURITI!\` 』˚｡⋆\n╭\n`;
         failText += `│ 『 ❌ 』 \`Hai esaurito i tuoi 3 tentativi!\`\n`;
         failText += `│ 『 ⏳ 』 _*Aspetta che altri provino...*_\n`;
         failText += `*╰⭒─ׄ─ׅ─ׄ─⭒─ׄ─ׅ─ׄ─*`;

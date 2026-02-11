@@ -2,7 +2,6 @@ const emojicategoria = {
   info: '⁉️',
   main: '🦋'
 }
-
 let tags = {
   'main': '╭ *`𝐌𝐀𝐈𝐍`* ╯',
   'info': '╭ *`𝐈𝐍𝐅𝐎`* ╯'
@@ -20,13 +19,10 @@ const defaultMenu = {
   footer: '*╰⭒─ׄ─ׅ─ׄ─⭒─ׄ─ׅ─ׄ─*\n',
   after: ``,
 }
-
-// URL dell'immagine unificata per tutti i menu
-const MENU_IMAGE_URL = 'https://i.ibb.co/hJW7WwxV/varebot.jpg';
-
+const swag = 'https://i.ibb.co/hJW7WwxV/varebot.jpg';
 function detectDevice(msgID) {
   if (!msgID) {
-    return 'unknown';
+    return 'unknown'; 
   } else if (/^[a-zA-Z]+-[a-fA-F0-9]+$/.test(msgID)) {
     return 'bot';
   } else if (msgID.startsWith('false_') || msgID.startsWith('true_')) {
@@ -64,6 +60,7 @@ function getRandomMenus() {
 
 let handler = async (m, { conn, usedPrefix: _p, __dirname }) => {
   try {
+    await conn.sendPresenceUpdate('composing', m.chat)
     let name = await conn.getName(m.sender) || 'Utente';
     let _uptime = process.uptime() * 1000;
     let uptime = clockString(_uptime);
@@ -118,7 +115,7 @@ let handler = async (m, { conn, usedPrefix: _p, __dirname }) => {
       }));
 
       const buttonMessage = {
-        image: { url: MENU_IMAGE_URL },
+        image: { url: swag },
         caption: text.trim(),
         footer: "",
         buttons: buttons,
@@ -129,95 +126,53 @@ let handler = async (m, { conn, usedPrefix: _p, __dirname }) => {
       
     } else {
       if (isGroup) {
-        // Menu per gruppi con immagine
-        const sections = [
-          {
-            title: "⭐ Menu Consigliati ⭐",
-            highlight_label: "CONSIGLIATO",
-            rows: [
-              {
-                header: "『 🤖 』",
-                title: "Menu IA",
-                description: "Intelligenza Artificiale",
-                id: _p + "menuia"
-              },
-              {
-                header: "『 ⭐』",
-                title: "Menu Premium",
-                description: "Funzionalità Premium",
-                id: _p + "menupremium"
-              }
-            ]
-          },
-          {
-            title: "Menu Standard",
-            highlight_label: "STANDARD",
-            rows: [
-              {
-                header: "『 🛠️ 』",
-                title: "Menu Strumenti",
-                description: "Utilità e tools",
-                id: _p + "menustrumenti"
-              },
-              {
-                header: "『 💰 』",
-                title: "Menu Euro",
-                description: "Sistema economico",
-                id: _p + "menueuro"
-              },
-              {
-                header: "『 🎮 』",
-                title: "Menu Giochi",
-                description: "Games e divertimento",
-                id: _p + "menugiochi"
-              },
-              {
-                header: "『 👥 』",
-                title: "Menu Gruppo",
-                description: "Gestione gruppi",
-                id: _p + "menugruppo"
-              },
-              {
-                header: "『 🔍 』",
-                title: "Menu Ricerche",
-                description: "Ricerca online",
-                id: _p + "menuricerche"
-              },
-              {
-                header: "『 📥 』",
-                title: "Menu Download",
-                description: "Scarica contenuti",
-                id: _p + "menudownload"
-              },
-              {
-                header: "『 👨‍💻 』",
-                title: "Menu Creatore",
-                description: "Comandi owner",
-                id: _p + "menucreatore"
-              }
-            ]
-          }
-        ];
+        let thumbnailBuffer;
+        try {
+          const response = await fetch(swag);
+          thumbnailBuffer = Buffer.from(await response.arrayBuffer());
+        } catch {
+          thumbnailBuffer = Buffer.alloc(0);
+        }
 
-        // Usa il metodo sendList con l'immagine
-        await conn.sendList(
-          m.chat, 
-          ``, // title
-          text.trim(), // text
-          "📋 Menu disponibili", // buttonText
-          MENU_IMAGE_URL, // buffer (immagine)
-          sections, // listSections
-          m // quoted
-        );
-        
+        await conn.sendMessage(m.chat, {
+          interactiveButtons: [{
+            name: "single_select",
+            buttonParamsJson: JSON.stringify({
+              title: "Menu Principale",
+              sections: [{
+                title: "⭐ Menu Consigliati ⭐",
+                highlight_label: "CONSIGLIATO",
+                rows: [
+                  { id: _p + "menuia", title: "🤖 Menu IA", description: "Intelligenza Artificiale" },
+                  { id: _p + "menupremium", title: "⭐ Menu Premium", description: "Funzionalità Premium" }
+                ]
+              }, {
+                title: "Menu Standard",
+                highlight_label: "STANDARD",
+                rows: [
+                  { id: _p + "menustrumenti", title: "🛠️ Menu Strumenti", description: "Utilità e tools" },
+                  { id: _p + "menueuro", title: "💰 Menu Euro", description: "Sistema economico" },
+                  { id: _p + "menugiochi", title: "🎮 Menu Giochi", description: "Giochi e divertimento" },
+                  { id: _p + "menugruppo", title: "👥 Menu Gruppo", description: "Gestione gruppi" },
+                  { id: _p + "menuricerche", title: "🔍 Menu Ricerche", description: "Ricerca online" },
+                  { id: _p + "menudownload", title: "📥 Menu Download", description: "Scarica contenuti" },
+                  { id: _p + "menucreatore", title: "👨‍💻 Menu Creatore", description: "Comandi owner" }
+                ]
+              }]
+            })
+          }],
+          text: text.trim(),
+          title: " ",
+          footer: "",
+          media: { image: thumbnailBuffer }
+        }, { quoted: m });
       } else {
-        // Menu per chat private con immagine
         const sections = [
           {
             title: "⭐ Menu Consigliati ⭐",
             rows: [
-              { title: "🤖 Menu IA", description: "Intelligenza Artificiale", rowId: _p + "menuia", highlight: true },
-              { title: "⭐ Menu Premium", description: "Funzionalità Premium", rowId: _p + "menupremium", highlight: true }
+              { title: "🤖 Menu IA", description: "Intelligenza Artificiale", rowId: _p + "menuia" },
+              { title: "⭐ Menu Premium", description: "Funzionalità Premium", rowId: _p + "menupremium" }
             ]
           },
           {
@@ -234,27 +189,21 @@ let handler = async (m, { conn, usedPrefix: _p, __dirname }) => {
           }
         ];
 
-        // Converti il formato per sendList
-        const sendListSections = sections.map(section => ({
-          title: section.title,
-          rows: section.rows.map(row => ({
-            header: row.title.split(' ')[0], // Prende l'emoji
-            title: row.title,
-            description: row.description,
-            id: row.rowId
-          }))
-        }));
+        let thumbnailBuffer;
+        try {
+          const response = await fetch(swag);
+          thumbnailBuffer = Buffer.from(await response.arrayBuffer());
+        } catch {
+          thumbnailBuffer = null;
+        }
 
-        // Usa il metodo sendList con l'immagine
-        await conn.sendList(
-          m.chat, 
-          ``, // title
-          text.trim(), // text
-          "📋 Menu disponibili", // buttonText
-          MENU_IMAGE_URL, // buffer (immagine)
-          sendListSections, // listSections
-          m // quoted
-        );
+        await conn.sendMessage(m.chat, {
+          text: text.trim(),
+          footer: "",
+          title: " ",
+          buttonText: "Menu Disponibili",
+          sections
+        }, { quoted: m });
       }
     }
 

@@ -65,7 +65,7 @@ handler.help = ['togliowner @user']
 handler.tags = ['creatore']
 handler.command = /^(togliowner|removeowner|delowner)$/i
 handler.creatorebot = true
-handler.rowner = true 
+handler.owner = true 
 handler.mods = false
 
 export default handler

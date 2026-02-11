@@ -42,8 +42,8 @@ ${usedPrefix + command} @user play
 }
 
 handler.help = ['bancmd @user comando']
-handler.tags = ['owner']
+handler.tags = ['creatore']
 handler.command = /^(bancmd|blockcmd)$/i
-handler.rowner = true 
+handler.owner = true 
 
 export default handler

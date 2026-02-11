@@ -1,4 +1,3 @@
-
 import { xpRange } from '../lib/levelling.js'
 
 const defaultMenu = {
@@ -15,6 +14,7 @@ let handler = async (m, { conn, usedPrefix: _p }) => {
   }
 
   try {
+    await conn.sendPresenceUpdate('composing', m.chat)
     let { level, exp, role } = global.db.data.users[m.sender]
     let { min, xp, max } = xpRange(level, global.multiplier)
     let name = await conn.getName(m.sender)
@@ -53,9 +53,9 @@ let handler = async (m, { conn, usedPrefix: _p }) => {
       gifPlayback: true,
       gifAttribution: 2,
       mimetype: 'video/mp4',
-      ...fake, // Usa il global.fake per il contesto
+      ...fake,
       contextInfo: {
-        ...fake.contextInfo, // Mantieni il contesto del fake
+        ...fake.contextInfo,
         mentionedJid: [m.sender],
         forwardedNewsletterMessageInfo: {
           ...fake.contextInfo.forwardedNewsletterMessageInfo,

@@ -1,7 +1,7 @@
 import Jimp from 'jimp';
 
-let handler = async (m, { conn, isOwner, isROwner, usedPrefix, command }) => {
-    if (!isOwner && !isROwner) return m.reply('❌ Solo il proprietario può usare questo comando!');
+let handler = async (m, { conn, isOwner, isSam, usedPrefix, command }) => {
+    if (!isOwner && !isSam) return m.reply('❌ Solo il proprietario può usare questo comando!');
     if (!m.quoted || !m.quoted.mimetype || !m.quoted.mimetype.startsWith('image/')) {
         return m.reply(
 `╭─🖼️ [ CAMBIA FOTO BOT ] 🖼️─╮

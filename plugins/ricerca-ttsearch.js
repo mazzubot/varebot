@@ -23,19 +23,13 @@ let handler = async (m, { conn, usedPrefix, command, text }) => {
             return conn.reply(m.chat, `\`Non ho trovato nessun video per "${text}", Prova con una ricerca diversa\``, m)
         }
         let selectedVideos = allFetchedVideos.slice(0, 5);
-        const cards = selectedVideos.map((video, index) => {
-            const title = video.title ? video.title.replace(/#[^\s#]+/g, '').replace(/\s+/g, ' ').trim() : 'Video TikTok';
+        const cards = selectedVideos.map((video) => {
             const author = video.author?.unique_id || 'Utente TikTok';
-            const views = video.play_count ? video.play_count.toLocaleString() : '?';
-            const likes = video.digg_count ? video.digg_count.toLocaleString() : '?';
-            const cover = video.cover || video.origin_cover || 'https://i.ibb.co/N25rgPrX/Gaara.jpg';
-            const duration = video.duration ? `${Math.floor(video.duration / 60)}:${(video.duration % 60).toString().padStart(2, '0')}` : '?';
-            
             return {
                 video: { url: video.play },
-                title: `\`${title.substring(0, 80) + (title.length > 80 ? '...' : '')}\``,
-                body: `『 👤 』 *${author}*\n『 ⏱️ 』 *${duration}*\n『 👁️ 』 *${views} visual*\n『 ❤️ 』 ${likes} *mi piace*`,
-                footer: '˗ˏˋ ☾ 𝚟𝚊𝚛𝚎𝚋𝚘𝚝 ☽ ˎˊ˗',
+                title: ``,
+                body: ``,
+                footer: '',
                 buttons: [
                     {
                         name: "cta_url",

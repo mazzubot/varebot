@@ -27,8 +27,9 @@ const defaultMenu = {
   after: `> ⋆｡°✩ 𝖛𝖆𝖗𝖊𝖇𝖔𝖙 ✩°｡⋆`,
 }
 
-let handler = async (m, { conn, usedPrefix: _p, __dirname }) => {
+let handler = async (m, { conn, usedPrefix: _p }) => {
   try {
+    await conn.sendPresenceUpdate('composing', m.chat)
     let { level, exp, role } = global.db.data.users[m.sender] || {}
     let { min, xp, max } = xpRange(level || 0, global.multiplier || 1)
     let name = await conn.getName(m.sender) || 'Utente'
@@ -69,8 +70,6 @@ let handler = async (m, { conn, usedPrefix: _p, __dirname }) => {
       }),
       defaultMenu.after
     ].join('\n')
-
-    // Sostituisco le variabili
     text = text.replace(/%name/g, name)
       .replace(/%level/g, level || 0)
       .replace(/%exp/g, exp || 0)

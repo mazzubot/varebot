@@ -1,113 +1,98 @@
-const userSpamData = new Map();
+const uzer = new Map();
+let bohtbhnonso = 0;
 const handler = m => m;
-handler.before = async function (m, { conn, isAdmin, isBotAdmin, isOwner, isROwner }) {
+handler.before = async function (m, { conn, isAdmin, isBotAdmin, isOwner, isSam }) {
     if (!m.isGroup) return;
-
     const chat = global.db.data.chats[m.chat] || {};
-
-    if (!chat.antispam || chat.modoadmin || isOwner || isROwner || isAdmin || !isBotAdmin) {
+    if (!chat.antispam || chat.modoadmin || isOwner || isSam || isAdmin || !isBotAdmin) {
         return;
     }
     if (m.message?.viewOnceMessage) return;
+    if (m.mtype === 'reactionMessage' || m.mtype === 'pollUpdateMessage' || m.mtype === 'protocolMessage') return;
+    const msgTimestamp = (m.messageTimestamp ? m.messageTimestamp * 1000 : Date.now());
+    if (Date.now() - msgTimestamp > 10000) return; 
     const sender = m.sender;
     let decodedSender = conn.decodeJid(sender);
     let senderNumber = decodedSender.split('@')[0].split(':')[0];
-    let domain = decodedSender.split('@')[1];
-    if (domain === 'lid') return;
-    const currentTime = Date.now();
-    const CONFIG = {
-        timeWindow: 15000,
-        removeThreshold: 9,
-        timeThreshold: 1200,
-        cleanupInterval: 300000,
-        duplicateWindow: 30000
+    if (decodedSender.split('@')[1] === 'lid') return;
+    const configurazioneantispam = {
+        timeWindow: 10000,
+        removeThreshold: 10,
+        timeThreshold: 1500,
+        duplicateWindow: 30000 
     };
-    cleanupOldData(CONFIG.cleanupInterval);
+    const yep = Date.now();
+    if (yep - bohtbhnonso > 300000) {
+        cleanupOldData(300000);
+        bohtbhnonso = yep;
+    }
 
-    let userData = userSpamData.get(decodedSender);
-
+    let userData = uzer.get(decodedSender);
     if (!userData) {
         userData = {
             timestamps: [],
-            messages: [],
-            contentHistory: new Map()
+            messages: []
         };
-        userSpamData.set(decodedSender, userData);
+        uzer.set(decodedSender, userData);
     }
     const messageContent = getMessageContent(m);
+    if (messageContent === 'unknown_message_type' || messageContent === 'error_parsing_message') return;
     const contentHash = hashContent(messageContent);
-    
-    userData.timestamps.push(currentTime);
+    userData.timestamps.push(msgTimestamp);
     userData.messages.push({
-        time: currentTime,
-        content: messageContent,
+        time: msgTimestamp,
         hash: contentHash
     });
-    userData.timestamps = userData.timestamps.filter(timestamp => 
-        currentTime - timestamp < CONFIG.timeWindow
-    );
-    userData.messages = userData.messages.filter(msg => 
-        currentTime - msg.time < CONFIG.timeWindow
-    );
+    userData.timestamps = userData.timestamps.filter(t => yep - t < configurazioneantispam.timeWindow);
+    userData.messages = userData.messages.filter(msg => yep - msg.time < configurazioneantispam.timeWindow);
     const duplicateCount = userData.messages.filter(msg => 
-        msg.hash === contentHash && msg.time !== currentTime
+        msg.hash === contentHash && msg.time !== msgTimestamp
     ).length;
-    let effectiveRemoveThreshold = CONFIG.removeThreshold;
-    
+    let effectiveRemoveThreshold = configurazioneantispam.removeThreshold;
     if (duplicateCount > 0) {
-        effectiveRemoveThreshold = Math.max(6, CONFIG.removeThreshold - duplicateCount * 2);
+        effectiveRemoveThreshold = Math.max(5, configurazioneantispam.removeThreshold - (duplicateCount * 2));
     }
-
     const messageCount = userData.timestamps.length;
     if (messageCount >= effectiveRemoveThreshold) {
+        userData.timestamps.sort((a, b) => a - b);
+        
         const totalDuration = userData.timestamps[userData.timestamps.length - 1] - userData.timestamps[0];
-        const averageTime = totalDuration / (userData.timestamps.length - 1);
-
-        if (averageTime < CONFIG.timeThreshold || duplicateCount >= 3) {
+        const averageTime = (userData.timestamps.length > 1) ? (totalDuration / (userData.timestamps.length - 1)) : 10000;
+        if (averageTime < configurazioneantispam.timeThreshold || duplicateCount >= 4) {
             try {
-                const reason = duplicateCount >= 3 ? 
-                    `contenuto ripetuto (${duplicateCount + 1} volte)` : 
-                    `messaggi troppo frequenti (${averageTime.toFixed(0)}ms di media)`;
-                
+                uzer.delete(decodedSender);
+                const reason = duplicateCount >= 4 ? 
+                    `spam ripetuto (${duplicateCount + 1}x)` : 
+                    `flood (${averageTime.toFixed(0)}ms media)`;
                 const utente = formatPhoneNumber(senderNumber, true);
-                const botMessage = `🔇 ${utente} è stato rimosso per spam: ${reason}`;
-                await conn.reply(m.chat, botMessage, m, { mentions: [decodedSender] });
+                await conn.reply(m.chat, `🔇 ${utente} rimosso per anti-spam: ${reason}`, m, { mentions: [decodedSender] });
                 await conn.groupParticipantsUpdate(m.chat, [decodedSender], 'remove');
+                
             } catch (e) {
-                console.error(`[AntiSpam] Errore nel rimuovere l'utente ${decodedSender}: ${e.message}`);
-                const utente = formatPhoneNumber(senderNumber, true);
-                await conn.reply(m.chat, `⚠️ Non ho i permessi per rimuovere ${utente} che sta spammando.`, m, { mentions: [decodedSender] });
+                console.error(`[AntiSpam] Errore rimozione ${decodedSender}:`, e);
             }
-            userSpamData.delete(decodedSender);
             return;
         }
     }
     
-    userSpamData.set(decodedSender, userData);
+    uzer.set(decodedSender, userData);
 };
+
 function getMessageContent(m) {
     try {
         if (m.message?.conversation) return m.message.conversation;
         if (m.message?.extendedTextMessage?.text) return m.message.extendedTextMessage.text;
-        if (m.message?.imageMessage?.caption) return `image:${m.message.imageMessage.caption || 'no_caption'}`;
-        if (m.message?.videoMessage?.caption) return `video:${m.message.videoMessage.caption || 'no_caption'}`;
-        if (m.message?.documentMessage?.caption) return `document:${m.message.documentMessage.caption || 'no_caption'}`;
-        if (m.message?.audioMessage) return 'audio_message';
-        if (m.message?.stickerMessage) return `sticker:${m.message.stickerMessage.fileSha256 || 'unknown'}`;
-        if (m.message?.contactMessage) return `contact:${m.message.contactMessage.displayName || 'unknown'}`;
-        if (m.message?.locationMessage) return 'location_message';
-        if (m.key?.participant?.includes('@meta') || m.key?.participant?.includes('ai')) {
-            return 'meta_ai_message';
-        }
-        if (m.message?.groupedMessages) return 'grouped_messages';
-        
+        if (m.message?.imageMessage?.caption) return `image:${m.message.imageMessage.caption}`;
+        if (m.message?.videoMessage?.caption) return `video:${m.message.videoMessage.caption}`;
+        if (m.message?.stickerMessage) return `sticker:${m.message.stickerMessage.fileSha256}`;
         return 'unknown_message_type';
     } catch (e) {
         return 'error_parsing_message';
     }
 }
+
 function hashContent(content) {
-    if (!content) return 'empty';
+    if (!content || content.length === 0) return 'empty';
     let hash = 0;
     for (let i = 0; i < content.length; i++) {
         const char = content.charCodeAt(i);
@@ -116,20 +101,18 @@ function hashContent(content) {
     }
     return hash.toString();
 }
+
 function cleanupOldData(interval) {
     const now = Date.now();
-    for (const [key, data] of userSpamData.entries()) {
-        if (data.timestamps.length > 0 && now - data.timestamps[data.timestamps.length - 1] > interval) {
-            userSpamData.delete(key);
-        } else if (data.timestamps.length === 0) {
-            userSpamData.delete(key);
+    for (const [key, data] of uzer.entries()) {
+        if (!data.timestamps.length || now - data.timestamps[data.timestamps.length - 1] > interval) {
+            uzer.delete(key);
         }
     }
 }
 
 function formatPhoneNumber(number, includeAt = false) {
     if (!number || number === '?' || number === 'sconosciuto') return includeAt ? '@Sconosciuto' : 'Sconosciuto';
-    if (number.startsWith('lid_')) return includeAt ? '@[ID nascosto]' : '[ID nascosto]';
     return includeAt ? '@' + number : number;
 }
 

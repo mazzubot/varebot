@@ -1,5 +1,5 @@
-let handler = async (m, { conn, text, usedPrefix, command, isOwner, isROwner }) => {
-    if (!isOwner && !isROwner) return m.reply('❌ Solo il proprietario può usare questo comando!');
+let handler = async (m, { conn, text, usedPrefix, command, isOwner, isSam }) => {
+    if (!isOwner && !isSam) return m.reply('❌ Solo il proprietario può usare questo comando!');
     if (!text) return m.reply(`✏️ Scrivi il nuovo nome del bot!\n\nEsempio:\n${usedPrefix + command} VareBot`);
 
     const newName = text.trim();
@@ -24,6 +24,6 @@ let handler = async (m, { conn, text, usedPrefix, command, isOwner, isROwner }) 
 handler.help = ['nomebot'];
 handler.tags = ['creatore'];
 handler.command = ['setbotname', 'nomebot'];
-handler.rowner = true;
+handler.owner = true;
 
 export default handler;

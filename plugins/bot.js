@@ -1,7 +1,7 @@
-
 /*⭑⭒━━━✦❘༻☾⋆⁺₊✧ Importazioni ✧₊⁺⋆☽༺❘✦━━━⭒⭑*/
 
-import fetch from 'node-fetch'
+import path from 'path'
+import { promises as fs } from 'fs'
 
 /*⭑⭒━━━✦❘༻☾⋆⁺₊✧ Handler base ✧₊⁺⋆☽༺❘✦━━━⭒⭑*/
 
@@ -10,39 +10,18 @@ handler.all = async function (m) {
   
 /*⭑⭒━━━✦❘༻☾⋆⁺₊✧ Dati utente globali ✧₊⁺⋆☽༺❘✦━━━⭒⭑*/
 
-
   global.nome = conn.getName(m.sender)
-  global.taguser = '@' + m.sender.split("@")[0]
-  global.readMore = String.fromCharCode(8206).repeat(850)
+  global.readMore = String.fromCharCode(8206).repeat(4001)
   global.authsticker = global.nome
   global.packsticker = global.nomepack
 
-/*⭑⭒━━━✦❘༻☾⋆⁺₊✧ Immagini e GIF ✧₊⁺⋆☽༺❘✦━━━⭒⭑*/
+/*⭑⭒━━━✦❘༻☾⋆⁺₊✧ Immagini ✧₊⁺⋆☽༺❘✦━━━⭒⭑*/
 
-  global.foto = [
-    'https://i.ibb.co/VYxgQ311/timetolockin.jpg',
-    'https://i.ibb.co/hJW7WwxV/varebot.jpg',
-    'https://i.ibb.co/Mkt4nKRm/download-1.jpg',
-    'https://i.ibb.co/0stc3P2/IMG-20220518-WA1960.jpg',
-    'https://i.ibb.co/Nn3jtT9S/Immagine-Whats-App-2025-05-19-ore-02-36-11-8183b81a.jpg',
-    'https://i.ibb.co/0jC5VpP3/39709bec-6869-41a7-a38b-03088a16247d.jpg',
-    'https://i.ibb.co/v65XDjR7/idgf.jpg',
-    'https://i.ibb.co/XkpqL9g4/image.jpg',
-    'https://i.ibb.co/Wpph0yV4/follow-4-more-pins.jpg',
-    'https://i.ibb.co/Q7KVK7vJ/3ddee360-dce6-4ebc-a9e2-45f8548aa4df.jpg',
-    'https://i.ibb.co/M5cJf9P9/scimmie.jpg',
-    'https://i.ibb.co/yBgkQnQR/9-5.jpg',
-  ].getRandom()
-
-  global.gifs = [
-    "https://i.ibb.co/rGTv68Dd/Death-note.gif",
-    "https://i.ibb.co/Qy102SX/download-1.gif",
-  ]
-  let gifUrl = gifs.getRandom()
+    global.foto = [path.join(process.cwd(), 'media', 'menu', 'menu.jpg')]
 
 /*⭑⭒━━━✦❘༻☾⋆⁺₊✧ Estetica: Thumb + Estilo ✧₊⁺⋆☽༺❘✦━━━⭒⭑*/
 
- let bufferThumb = Buffer.from(await (await fetch(global.foto)).arrayBuffer())
+ let zwag = await fs.readFile(global.foto)
   global.estilo = {
     key: {
       fromMe: true,
@@ -55,7 +34,7 @@ handler.all = async function (m) {
         surface: 1,
         message: global.nomepack,
         orderTitle: 'js gimme my moneyyy',
-        thumbnail: bufferThumb,
+        thumbnail: zwag,
         sellerJid: '0@s.whatsapp.net'
       }
     }
@@ -106,7 +85,7 @@ global.fkontak = {
       externalAdReply: {
         title: testobot,
         body: dev,
-        thumbnailUrl: foto,
+        thumbnail: zwag,
         sourceUrl: '',
         mediaType: 1,
         renderLargerThumbnail: false
@@ -117,7 +96,7 @@ global.fkontak = {
 
 /*⭑⭒━━━✦❘༻☾⋆⁺₊✧ Canali predefiniti ✧₊⁺⋆☽༺❘✦━━━⭒⭑*/
 
-global.IdCanale = ['120363418582531215@newsletter',/*'tuojidcanale@newsletter' non togliere quello di varebot*/]
+global.IdCanale = ['120363418582531215@newsletter',/*'tuojidcanale@newsletter'*/] // Vietato togliere il jid di Varebot
 global.NomeCanale = [
   '⭒━━✧❘༻☾⋆⁺₊🩸 𝓿𝓪𝓻𝓮𝓫𝓸𝓽 🕊️₊⁺⋆☽༺❘✧━━⭒',
   '✧⋆⁺₊❖⭑ 𝓿𝓪𝓻𝓮𝓫𝓸𝓽 ⭑❖₊⁺⋆✧',

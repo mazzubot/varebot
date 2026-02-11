@@ -1,11 +1,9 @@
-var handler = async (m, { conn, participants, usedPrefix, command }) => {
+var handler = async (m, { conn, participants }) => {
     try {
-        // Intercetta "abdul" senza prefix
         if (m.text && m.text.toLowerCase().trim() === 'abdul') {
-            // Verifica permessi admin
             const groupAdmins = participants.filter(p => p.admin).map(p => p.id)
             if (!groupAdmins.includes(m.sender) && !m.fromMe) {
-                return // Non fare nulla se non è admin
+                return
             }
             
             if (!m.mentionedJid[0] && !m.quoted) {
@@ -33,17 +31,15 @@ var handler = async (m, { conn, participants, usedPrefix, command }) => {
             }
             
             await conn.groupParticipantsUpdate(m.chat, [user], 'remove');
-            await conn.sendMessage(m.chat, { sticker: { url: './media/sticker/bann.webp' } }, { quoted: m });
+            await conn.sendMessage(m.chat, { sticker: { url: './media/sticker/banzozzap.webp' } }, { quoted: m });
             return
         }
-
-        // Handler normale per gli altri comandi
         const isOwner = m.fromMe || global.owner
             .map(v => typeof v === 'string' ? v : Array.isArray(v) ? v[0] : v.toString())
             .map(v => v.replace(/[^0-9]/g, '') + '@s.whatsapp.net')
             .includes(m.sender)
            
-        const isROwner = isOwner || (global.owner[0] && global.owner[0][0] + '@s.whatsapp.net' === m.sender)
+        const isSam = isOwner || (global.owner[0] && global.owner[0][0] + '@s.whatsapp.net' === m.sender)
        
         if (!m.mentionedJid[0] && !m.quoted) {
             let errorMsg = `*chi vuoi rimuovere?*`
@@ -68,7 +64,7 @@ var handler = async (m, { conn, participants, usedPrefix, command }) => {
             return conn.reply(m.chat, '『 🤒 』 `Non posso rimuovere un altro admin`', m);
         }
         await conn.groupParticipantsUpdate(m.chat, [user], 'remove');
-        await conn.sendMessage(m.chat, { sticker: { url: './media/sticker/bann.webp' } }, { quoted: m });
+        await conn.sendMessage(m.chat, { sticker: { url: './media/sticker/banzozzap.webp' } }, { quoted: m });
     } catch (e) {
         console.error(e)
         return m.reply(`${global.errore}`)
@@ -80,5 +76,4 @@ handler.command = /^(kick|rimuovi|paki|ban)$/i
 handler.group = true
 handler.admin = true
 handler.botAdmin = true
-handler.all = true // Questo permette di intercettare tutti i messaggi
 export default handler

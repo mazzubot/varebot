@@ -1,6 +1,9 @@
 import fetch from 'node-fetch'
 import { FormData } from 'formdata-node'
 import { downloadContentFromMessage } from '@realvare/based'
+import Jimp from 'jimp'
+import jsQR from 'jsqr'
+
 const sonoilgattoperquestitopi = /(?:https?:\/\/)?(?:www\.)?[-a-zA-Z0-9@:%._\+~#=]{1,256}\.[a-zA-Z0-9()]{1,6}\b(?:[-a-zA-Z0-9()@:%_\+.~#?&=]*)/gi;
 const doms = {
     tiktok: ['tiktok.com', 'vm.tiktok.com', 'tiktok.it', 'tiktok.fr', 'tiktok.de', 'tiktok.es', 'tiktok.co.uk'],
@@ -33,15 +36,12 @@ const MESSAGES = {
 
 async function getMediaBuffer(message) {
     try {
-        const msg = message.message && message.message.imageMessage
-            || message.message && message.message.videoMessage
-            || message.message && message.message.extendedTextMessage && message.message.extendedTextMessage.contextInfo && message.message.extendedTextMessage.contextInfo.quotedMessage && message.message.extendedTextMessage.contextInfo.quotedMessage.imageMessage
-            || message.message && message.message.extendedTextMessage && message.message.extendedTextMessage.contextInfo && message.message.extendedTextMessage.contextInfo.quotedMessage && message.message.extendedTextMessage.contextInfo.quotedMessage.videoMessage
+        const found = findFirstMediaMessage(message, { excludeQuoted: false })
+        if (!found) return null
 
-        if (!msg) return null
-
-        const type = msg.mimetype && msg.mimetype.startsWith('video') ? 'video' : 'image'
-        const stream = await downloadContentFromMessage(msg, type)
+        const { node, typeKey } = found
+        const type = typeKey === 'videoMessage' ? 'video' : typeKey === 'stickerMessage' ? 'sticker' : 'image'
+        const stream = await downloadContentFromMessage(node, type)
 
         let buffer = Buffer.from([])
         for await (const chunk of stream) {
@@ -55,7 +55,82 @@ async function getMediaBuffer(message) {
     }
 }
 
+function unwrapMessageContent(message) {
+    let content = message?.message || message
+    for (let i = 0; i < 10; i++) {
+        if (content?.ephemeralMessage?.message) {
+            content = content.ephemeralMessage.message
+            continue
+        }
+        if (content?.viewOnceMessage?.message) {
+            content = content.viewOnceMessage.message
+            continue
+        }
+        if (content?.viewOnceMessageV2?.message) {
+            content = content.viewOnceMessageV2.message
+            continue
+        }
+        if (content?.viewOnceMessageV2Extension?.message) {
+            content = content.viewOnceMessageV2Extension.message
+            continue
+        }
+        if (content?.documentWithCaptionMessage?.message) {
+            content = content.documentWithCaptionMessage.message
+            continue
+        }
+        if (content?.editedMessage?.message) {
+            content = content.editedMessage.message
+            continue
+        }
+        break
+    }
+    return content
+}
+
+function findFirstMediaMessage(message, { excludeQuoted = false } = {}) {
+    const root = unwrapMessageContent(message)
+    const seen = new Set()
+    const MEDIA_KEYS = new Set(['imageMessage', 'videoMessage', 'stickerMessage'])
+
+    function visit(obj) {
+        if (!obj || typeof obj !== 'object') return null
+        if (seen.has(obj)) return null
+        seen.add(obj)
+        if (Buffer.isBuffer(obj)) return null
+
+        for (const key of Object.keys(obj)) {
+            if (excludeQuoted && key === 'quotedMessage') continue
+            const value = obj[key]
+            if (MEDIA_KEYS.has(key) && value && typeof value === 'object') {
+                return { node: value, typeKey: key }
+            }
+            if (value && typeof value === 'object') {
+                const hit = visit(value)
+                if (hit) return hit
+            }
+        }
+        return null
+    }
+
+    return visit(root)
+}
+
+async function readQRCodeLocal(imageBuffer) {
+    try {
+        const img = await Jimp.read(imageBuffer)
+        const { data, width, height } = img.bitmap
+        const clamped = new Uint8ClampedArray(data.buffer, data.byteOffset, data.byteLength)
+        const code = jsQR(clamped, width, height)
+        return code?.data || null
+    } catch {
+        return null
+    }
+}
+
 async function readQRCode(imageBuffer) {
+    const local = await readQRCodeLocal(imageBuffer)
+    if (local && typeof local === 'string' && local.trim()) return local.trim()
+
     const apis = [
         {
             name: 'qr-server',
@@ -64,7 +139,8 @@ async function readQRCode(imageBuffer) {
                 const timeout = setTimeout(() => controller.abort(), 8000)
 
                 const formData = new FormData()
-                formData.append('file', buffer, 'image.jpg')
+                const blob = new Blob([buffer], { type: 'image/jpeg' })
+                formData.append('file', blob, 'image.jpg')
 
                 const response = await fetch('https://api.qrserver.com/v1/read-qr-code/', {
                     method: 'POST',
@@ -78,28 +154,6 @@ async function readQRCode(imageBuffer) {
 
                 const data = await response.json()
                 return data && data[0] && data[0].symbol && data[0].symbol[0] && data[0].symbol[0].data || null
-            }
-        },
-        {
-            name: 'qr-api',
-            func: async (buffer) => {
-                const base64 = buffer.toString('base64')
-                const controller = new AbortController()
-                const timeout = setTimeout(() => controller.abort(), 8000)
-
-                const response = await fetch('https://qr-api.is/api/scan', {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ image: `data:image/jpeg;base64,${base64}` }),
-                    signal: controller.signal
-                })
-
-                clearTimeout(timeout)
-                
-                if (!response.ok) throw new Error(`HTTP ${response.status}`)
-                
-                const data = await response.json()
-                return data?.data
             }
         }
     ];
@@ -124,68 +178,36 @@ async function readQRCode(imageBuffer) {
     return null
 }
 
-function extractPossibleText(m) {
+function extractTextFromMessage(m, excludeQuoted = false) {
     const texts = []
-    if (m.text) texts.push(m.text)
-    if (m.message && m.message.extendedTextMessage && m.message.extendedTextMessage.text) {
-        texts.push(m.message.extendedTextMessage.text)
-    }
-    if (m.message && m.message.imageMessage && m.message.imageMessage.caption) {
-        texts.push(m.message.imageMessage.caption)
-    }
-    if (m.message && m.message.videoMessage && m.message.videoMessage.caption) {
-        texts.push(m.message.videoMessage.caption)
-    }
-    if (m.message && m.message.extendedTextMessage && m.message.extendedTextMessage.contextInfo && m.message.extendedTextMessage.contextInfo.quotedMessage) {
-        const quoted = m.message.extendedTextMessage.contextInfo.quotedMessage
-        if (quoted.imageMessage && quoted.imageMessage.caption) {
-            texts.push(quoted.imageMessage.caption)
-        }
-        if (quoted.videoMessage && quoted.videoMessage.caption) {
-            texts.push(quoted.videoMessage.caption)
-        }
-    }
-    const pollV3 = m.message && m.message.pollCreationMessageV3
-    if (pollV3) {
-        if (pollV3.name) texts.push(pollV3.name)
-        if (pollV3.title) texts.push(pollV3.title)
-        if (pollV3.options) {
-            pollV3.options.forEach(option => {
-                if (option.optionName) texts.push(option.optionName)
-            })
+    const seen = new Set()
+    const IGNORED_KEYS = [
+        'fileSha256', 'mediaKey', 'fileEncSha256', 'jpegThumbnail',
+        'participant', 'stanzaId', 'remoteJid', 'id'
+    ]
+
+    function recursiveExtract(obj) {
+        if (!obj || typeof obj !== 'object') return
+        if (seen.has(obj)) return
+        seen.add(obj)
+        if (Buffer.isBuffer(obj)) return
+
+        for (const key in obj) {
+            if (excludeQuoted && key === 'quotedMessage') continue
+            if (IGNORED_KEYS.includes(key)) continue
+            const value = obj[key]
+            if (typeof value === 'string' && value.length > 0) {
+                texts.push(value)
+            } else if (typeof value === 'object') {
+                recursiveExtract(value)
+            }
         }
     }
-    const pollLegacy = m.message && m.message.pollCreationMessage
-    if (pollLegacy) {
-        if (pollLegacy.name) texts.push(pollLegacy.name)
-        if (pollLegacy.title) texts.push(pollLegacy.title)
-        if (pollLegacy.options) {
-            pollLegacy.options.forEach(option => {
-                if (option.optionName) texts.push(option.optionName)
-            })
-        }
-    }
-    const quotedPollV3 = m.message && m.message.extendedTextMessage && m.message.extendedTextMessage.contextInfo && m.message.extendedTextMessage.contextInfo.quotedMessage && m.message.extendedTextMessage.contextInfo.quotedMessage.pollCreationMessageV3
-    if (quotedPollV3) {
-        if (quotedPollV3.name) texts.push(quotedPollV3.name)
-        if (quotedPollV3.title) texts.push(quotedPollV3.title)
-        if (quotedPollV3.options) {
-            quotedPollV3.options.forEach(option => {
-                if (option.optionName) texts.push(option.optionName)
-            })
-        }
-    }
-    const quotedPollLegacy = m.message && m.message.extendedTextMessage && m.message.extendedTextMessage.contextInfo && m.message.extendedTextMessage.contextInfo.quotedMessage && m.message.extendedTextMessage.contextInfo.quotedMessage.pollCreationMessage
-    if (quotedPollLegacy) {
-        if (quotedPollLegacy.name) texts.push(quotedPollLegacy.name)
-        if (quotedPollLegacy.title) texts.push(quotedPollLegacy.title)
-        if (quotedPollLegacy.options) {
-            quotedPollLegacy.options.forEach(option => {
-                if (option.optionName) texts.push(option.optionName)
-            })
-        }
-    }
-    
+
+    if (m?.text) texts.push(m.text)
+    if (m?.caption) texts.push(m.caption)
+    recursiveExtract(unwrapMessageContent(m))
+
     return texts.join(' ').replace(/[\s\u200b\u200c\u200d\uFEFF\u2060\u00A0]+/g, ' ').trim()
 }
 
@@ -201,6 +223,7 @@ function detectSocialLink(url) {
     }
     return null
 }
+
 function getMessageType(m) {
     if (m.message && (m.message.pollCreationMessageV3 || m.message.pollCreationMessage)) {
         return 'poll'
@@ -213,19 +236,27 @@ function getMessageType(m) {
     }
     return 'link'
 }
-export async function before(m, { conn, isAdmin, isBotAdmin, isOwner, isROwner }) {
+
+export async function before(m, { conn, isAdmin, isBotAdmin, isOwner, isSam }) {
     if (!m.isGroup) return false
-    if (isAdmin || isOwner || isROwner || m.fromMe) return false
+    if (isAdmin || isOwner || isSam || m.fromMe) return false
     const chat = global.db.data.chats[m.chat]
-    if (!chat?.antiLink2) return false
+    if (!chat) return false
+    const hasMaster = !!chat.antiLink2
+    const hasAnySocialToggle = !hasMaster && Object.keys(chat).some(k => k.startsWith('antiLink2_') && chat[k] === true)
+    if (!hasMaster && !hasAnySocialToggle) return false
     try {
-        const extractedText = extractPossibleText(m)
+        const extractedText = extractTextFromMessage(m, true)
 
         if (extractedText) {
             const urls = extractedText.match(sonoilgattoperquestitopi) || []
             for (const url of urls) {
                 const detectedPlatform = detectSocialLink(url)
                 if (detectedPlatform) {
+                    if (!hasMaster) {
+                        const platformKey = `antiLink2_${detectedPlatform}`
+                        if (chat[platformKey] !== true) continue
+                    }
                     const user = global.db.data.chats[m.chat].users = global.db.data.chats[m.chat].users || {}
                     user[m.sender] = user[m.sender] || {}
                     user[m.sender].antiLink2Warns = (user[m.sender].antiLink2Warns || 0) + 1
@@ -264,6 +295,10 @@ export async function before(m, { conn, isAdmin, isBotAdmin, isOwner, isROwner }
                 console.log(`[ANTILINK] QR decodificato: ${qrData.substring(0, 100)}...`)
                 const detectedPlatform = detectSocialLink(qrData)
                 if (detectedPlatform) {
+                    if (!hasMaster) {
+                        const platformKey = `antiLink2_${detectedPlatform}`
+                        if (chat[platformKey] !== true) return false
+                    }
                     const user = global.db.data.chats[m.chat].users = global.db.data.chats[m.chat].users || {}
                     user[m.sender] = user[m.sender] || {}
                     user[m.sender].antiLink2Warns = (user[m.sender].antiLink2Warns || 0) + 1

@@ -12,6 +12,7 @@ let handler = async (m, { conn, usedPrefix: _p }) => {
   }
 
   try {
+    await conn.sendPresenceUpdate('composing', m.chat)
     let help = Object.values(global.plugins).filter(plugin => !plugin.disabled && plugin.tags && plugin.tags.includes('strumenti')).map(plugin => ({
       help: Array.isArray(plugin.help) ? plugin.help : [plugin.help],
       prefix: 'customPrefix' in plugin,

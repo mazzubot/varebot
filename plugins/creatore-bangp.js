@@ -1,3 +1,4 @@
+// è un po outdated sto plugin (assieme al unbangp)
 let handler = async (m, { conn, args, isOwner }) => {
     try {
         if (!isOwner) {
@@ -20,9 +21,7 @@ let handler = async (m, { conn, args, isOwner }) => {
             global.db.data = {
                 users: {},
                 chats: {},
-                stats: {},
                 msgs: {},
-                sticker: {},
                 settings: {}
             }
         }
@@ -31,10 +30,6 @@ let handler = async (m, { conn, args, isOwner }) => {
                 banned: false,
                 welcome: false,
                 detect: false,
-                sWelcome: '',
-                sBye: '',
-                sPromote: '',
-                sDemote: '',
                 delete: true,
                 antiLink: false,
                 viewonce: false,
@@ -74,18 +69,6 @@ let handler = async (m, { conn, args, isOwner }) => {
 └─⭓ Ban attivo fino a revoca
 
 > vare ✧ bot`)
-        let admins = groupInfo.participants.filter(p => p.admin)
-        let adminMsg = `*⚠️ NOTIFICA ADMIN*\n`
-        adminMsg += `━━━━━━━━━━━━━━━━\n\n`
-        adminMsg += `*📝 Info:*\n`
-        adminMsg += `└─⭓ Questo gruppo è stato bannato\n\n`
-        adminMsg += `*📌 Note:*\n`
-        adminMsg += `└─⭓ Il bot non risponderà ai comandi\n\n`
-        adminMsg += `> vare ✧ bot`
-
-        for (let admin of admins) {
-            await conn.sendMessage(admin.id, { text: adminMsg })
-        }
     } catch (e) {
         console.error(e)
         return m.reply(`*❌ ERRORE*\n` +
@@ -99,7 +82,7 @@ let handler = async (m, { conn, args, isOwner }) => {
 handler.help = ['bangp']
 handler.tags = ['creatore']
 handler.command = /^bangp$/i
-handler.rowner = true
+handler.owner = true
 handler.group = true
 
 export default handler

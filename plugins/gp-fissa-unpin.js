@@ -11,20 +11,12 @@ const handler = async (m, { conn, args, command }) => {
   const isUnpinAll = ['unpinall', 'defissatutti'].includes(command.toLowerCase());
   const isFinalPin = command === 'pinfinal';
   const isPin = !isUnpin && !isFinalPin && !isUnpinAll;
-  if (isUnpinAll) {
-    try {
-      await conn.sendMessage(m.chat, { pin: { type: 3 } });
-      return m.reply('『 ✅ 』 \`Tutti i messaggi sono stati defissati.\`');
-    } catch (e) {
-      console.error('Errore durante lo sblocco di tutti i messaggi:', e);
-      return m.reply(`${global.errore}`);
-    }
-  }
+
   if (isUnpin) {
     if (!m.quoted) return m.reply('『 ⛓️‍💥 』 \`Rispondi al messaggio da defissare.\`');
-    
+
     let key = null;
-    
+
     if (m.quoted.key) {
       key = m.quoted.key;
     } else if (m.quoted.id) {
@@ -34,11 +26,11 @@ const handler = async (m, { conn, args, command }) => {
         remoteJid: m.chat
       };
     }
-    
+
     if (!key) {
       return m.reply(`${global.errore}`);
     }
-    
+
     try {
       await conn.sendMessage(m.chat, { pin: { type: 2, key } });
       return m.reply('『 ✅ 』 \`Messaggio defissato.\`');
@@ -47,11 +39,12 @@ const handler = async (m, { conn, args, command }) => {
       return m.reply(`${global.errore}`);
     }
   }
+
   if (isFinalPin) {
     const [secondsRaw, base64Key] = args;
     const seconds = parseInt(secondsRaw);
     let key;
-    
+
     try {
       if (isNaN(seconds)) throw new Error('Durata non valida.');
       if (!base64Key) throw new Error('Chiave del messaggio mancante (Base64).');
@@ -71,11 +64,12 @@ const handler = async (m, { conn, args, command }) => {
       return m.reply(`${global.errore}`);
     }
   }
+
   if (isPin) {
     const text = args.join(' ');
     if (m.quoted && !text) {
       let quotedKey = null;
-      
+
       if (m.quoted.key) {
         quotedKey = m.quoted.key;
       } else if (m.quoted.id && m.quoted.sender) {

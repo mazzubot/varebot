@@ -5,10 +5,10 @@ const handler = async (m, { conn, args }) => {
   if (!user) return m.reply(`🚫 L'utente non è presente nel database.`);
 
   user.infinito = true;
-  user.money = Infinity;
-  user.euro = Infinity;
-  user.level = Infinity;
-  user.exp = Infinity;
+  user.money = 999999999999;
+  user.euro = 999999999999;
+  user.level = 999999999999;
+  user.exp = 999999999999;
 
   const frasiAltri = [
     'è stato promosso agli occhi del creatore',
@@ -24,6 +24,8 @@ const handler = async (m, { conn, args }) => {
   const frase = target === m.sender
     ? frasiSelf[Math.floor(Math.random() * frasiSelf.length)]
     : frasiAltri[Math.floor(Math.random() * frasiAltri.length)];
+
+  await global.db.write();
 
   conn.sendMessage(
     m.chat,

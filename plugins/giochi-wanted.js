@@ -1,4 +1,4 @@
-import fetch from 'node-fetch'
+/*import fetch from 'node-fetch'
 
 let dailyUsage = {};
 
@@ -41,7 +41,6 @@ let handler = async (m, { conn, text, usedPrefix, command }) => {
 
         let bounty = Math.floor(Math.random() * 1000000000)
         let formattedBounty = bounty.toLocaleString('it-IT')
-        let apiUrl = `https://api.lolhuman.xyz/api/creator1/wanted?apikey=2485ed0b620edd6f176ce3f0&img=${encodeURIComponent(pp)}`
 
         let res = await fetch(apiUrl, {
             method: 'GET',
@@ -85,4 +84,4 @@ handler.help = ['wanted']
 handler.tags = ['giochi']
 handler.command = /^(wanted)$/i
 handler.register = true
-export default handler
+export default handler*/

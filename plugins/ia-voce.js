@@ -1,4 +1,13 @@
-import fetch from 'node-fetch';
+import { MsEdgeTTS, OUTPUT_FORMAT } from 'msedge-tts';
+
+function streamToBuffer(stream) {
+  return new Promise((resolve, reject) => {
+    const chunks = [];
+    stream.on('data', (chunk) => chunks.push(chunk));
+    stream.on('end', () => resolve(Buffer.concat(chunks)));
+    stream.on('error', reject);
+  });
+}
 
 let handler = async (m, { conn, args, usedPrefix, command }) => {
   const [voiceKey, ...textArr] = m.text.split('|').map(v => v.trim());
@@ -6,46 +15,55 @@ let handler = async (m, { conn, args, usedPrefix, command }) => {
   const text = textArr.join(' ');
 
   const voices = {
-    antonio: 'TxGEqnHWrfWFTfGW9XjX',  // Italian Male
-    giulia: 'MF3mGyEYCl7XYWbV9V6O',   // Italian Female
-    narratore: 'pNInz6obpgDQGcFmaJgB', // English Male
-    sofia: '21m00Tcm4TlvDq8ikWAM',     // English Female
+    diego: 'it-IT-DiegoNeural', 
+    elsa: 'it-IT-ElsaNeural',
+    cosimo: 'it-IT-CosimoNeural',
+    fabiola: 'it-IT-FabiolaNeural',
+    gianni: 'it-IT-GianniNeural',
+    imelda: 'it-IT-ImeldaNeural',
+    iacopo: 'it-IT-IacopoNeural',
+    iris: 'it-IT-IrisNeural',
+    christopher: 'en-US-ChristopherNeural',
+    sofia: 'en-US-AriaNeural',
+    david: 'en-US-AriaRUS',
+    emma: 'en-US-ZiraRUS',
+    james: 'en-GB-SoniaNeural',
+    lily: 'en-GB-LibbyNeural',
+    alvaro: 'es-ES-AlvaroNeural',
+    elvira: 'es-ES-ElviraNeural',
+    denise: 'fr-FR-DeniseNeural',
+    henri: 'fr-FR-HenriNeural'
   };
 
   if (!voice || !text) {
-    return m.reply(`❌ *Uso corretto:* ${usedPrefix}voce <voce> | <testo>\n\n🎙️ *Voci disponibili:*\n${Object.keys(voices).join(', ')}`);
+    return m.reply(`『 ❌ 』 *Uso corretto:* ${usedPrefix}voce <voce> | <testo>
+
+『 🇮🇹 』 *Voci Italiane:*
+- *diego, elsa, cosimo, fabiola, gianni, imelda, iacopo, iris*
+
+『 🇺🇸🇬🇧 』 *Voci Inglesi:*
+- *christopher, sofia, david, emma, james, lily*
+
+『 🇪🇸 』 *Voci Spagnole:*
+- *alvaro, elvira*
+
+『 🇫🇷 』 *Voci Francesi:*
+- *denise, henri* 
+
+> 『 💡 』 *Esempio:* ${usedPrefix}voce diego | Se non sei furbo non hai futuro!`);
   }
 
   const voiceId = voices[voice];
   if (!voiceId) return m.reply(`❌ Voce non trovata. Usa una di queste: ${Object.keys(voices).join(', ')}`);
 
-  const payload = {
-    text,
-    model_id: 'eleven_multilingual_v2', // forza il modello multilingua
-    voice_settings: {
-      stability: 0.7,
-      similarity_boost: 0.85,
-      style: 0.3,
-      use_speaker_boost: true
-    }
-  };
-
   try {
-    const res = await fetch(`https://api.elevenlabs.io/v1/text-to-speech/${voiceId}`, {
-      method: 'POST',
-      headers: {
-        'xi-api-key': global.APIKeys?.elevenlabs,
-        'Content-Type': 'application/json',
-        'accept': 'audio/mpeg'
-      },
-      body: JSON.stringify(payload)
-    });
+    const tts = new MsEdgeTTS();
+    await tts.setMetadata(voiceId, OUTPUT_FORMAT.AUDIO_24KHZ_96KBITRATE_MONO_MP3);
+    const result = await tts.toStream(text);
+    const readable = result.audioStream;
+    const audio = await streamToBuffer(readable);
 
-    if (!res.ok) throw new Error(await res.text());
-    const audio = await res.arrayBuffer();
-    const filename = `voce-${Date.now()}.mp3`;
-
-    await conn.sendFile(m.chat, audio, filename, null, m, true, {
+    await conn.sendFile(m.chat, audio, `voce-${Date.now()}.mp3`, null, m, true, {
       mimetype: 'audio/mpeg',
       ptt: false
     });
@@ -57,7 +75,7 @@ let handler = async (m, { conn, args, usedPrefix, command }) => {
 };
 
 handler.help = ['voce <voce> | <testo>'];
-handler.tags = ['ai', 'audio'];
+handler.tags = ['ai', 'audio', 'iaaudio'];
 handler.command = /^voce$/i;
 handler.register = true
 export default handler;

@@ -1,7 +1,7 @@
 import fetch from 'node-fetch'
 import axios from 'axios'
 
-const GEMINI_API_KEY = `${global.APIKeys.gemini}`
+const GEMINI_API_KEY = `${global.APIKeys.google}`
 const GOOGLE_API_KEY = `${global.APIKeys.google}`
 const SEARCH_ENGINE_ID = `${global.APIKeys.googleCX}`
 const nutritionDatabase = {

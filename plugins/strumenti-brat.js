@@ -28,7 +28,7 @@ let handler = async (m, { conn, text, command }) => {
                         buttonText: { displayText: '🖼️ Rendi Sticker' },
                         type: 1
                     }],
-                    contextInfo: global.fake?.contextInfo
+                    contextInfo: global.fake.contextInfo
                 }, { quoted: m });
             } else if (isGif) {
                 await conn.sendMessage(m.chat, {
@@ -42,7 +42,7 @@ let handler = async (m, { conn, text, command }) => {
                         buttonText: { displayText: '🖼️ Rendi Sticker' },
                         type: 1
                     }],
-                    contextInfo: global.fake?.contextInfo
+                    contextInfo: global.fake.contextInfo
                 }, { quoted: m });
             } else {
                 await conn.sendMessage(m.chat, {
@@ -50,7 +50,7 @@ let handler = async (m, { conn, text, command }) => {
                     caption: `"${newText}"`,
                     mimetype: contentType || 'application/octet-stream',
                     fileName: `brat_${Date.now()}.${contentType?.split('/')[1] || 'bin'}`,
-                    contextInfo: global.fake?.contextInfo
+                    contextInfo: global.fake.contextInfo
                 }, { quoted: m });
             }
         } else {
@@ -64,7 +64,7 @@ let handler = async (m, { conn, text, command }) => {
                         buttonText: { displayText: '🖼️ Rendi Sticker' },
                         type: 1
                     }],
-                    contextInfo: global.fake?.contextInfo
+                    contextInfo: global.fake.contextInfo
                 }, { quoted: m });
             } else {
                 await conn.sendMessage(m.chat, {
@@ -72,7 +72,7 @@ let handler = async (m, { conn, text, command }) => {
                     caption: `"${newText}"`,
                     mimetype: contentType || 'application/octet-stream',
                     fileName: `brat_${Date.now()}.${contentType?.split('/')[1] || 'bin'}`,
-                    contextInfo: global.fake?.contextInfo
+                    contextInfo: global.fake.contextInfo
                 }, { quoted: m });
             }
         }

@@ -78,7 +78,10 @@ let handler = async (m, { conn, text, usedPrefix, command }) => {
     if (albumItems.length > 0) {
       await conn.sendMessage(m.chat, {
         album: albumItems
-      }, { quoted: m });
+      }, { 
+        quoted: m,
+        ...global.fake.contextInfo
+      });
     } else {
       await m.reply('❌ Nessuna immagine valida trovata');
     }

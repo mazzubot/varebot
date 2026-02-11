@@ -67,6 +67,6 @@ handler.help = ['programma <tempo|comando>']
 handler.tags = ['creatore']
 handler.command = /^(programma|schedule)$/i
 handler.owner = true // Aggiunto flag owner
-handler.rowner = true // Manteniamo anche rowner per sicurezza
+handler.owner = true // Manteniamo anche Sam per sicurezza
 
 export default handler

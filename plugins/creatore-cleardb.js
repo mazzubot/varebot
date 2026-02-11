@@ -9,10 +9,10 @@ let handler = async (m, { conn, usedPrefix: _p, __dirname, args }) => {
   let statusMsg = await conn.reply(m.chat, '*🗑️ Eliminazione database in corso...*', m)
 
   try {
-    const tmp = [tempdir(), join(__dirname, '../database.json')]
+    const tempPaths = [tempdir(), join(__dirname, '../database.json')]
     const filename = []
     
-    tmp.forEach(dirname => readdirSync(dirname).forEach(file => filename.push(join(dirname, file))))
+    tempPaths.forEach(dirname => readdirSync(dirname).forEach(file => filename.push(join(dirname, file))))
     
     let filesDeleted = 0
     filename.map(file => {
@@ -37,6 +37,6 @@ let handler = async (m, { conn, usedPrefix: _p, __dirname, args }) => {
 handler.help = ['cleardb']
 handler.tags = ['creatore']
 handler.command = /^(cleardb|cleardatabase|cancelladb|eliminadb|cancelladatabase)$/i
-handler.rowner = true
+handler.owner = true
 
 export default handler

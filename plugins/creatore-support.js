@@ -45,5 +45,5 @@ let handler = async (m, { conn, isOwner, usedPrefix, command, args }) => {
 }
 
 handler.command = /^(supportwa|support)$/i
-handler.rowner = true 
+handler.owner = true 
 export default handler

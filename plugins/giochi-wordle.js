@@ -4,7 +4,7 @@ const EURO_REWARD = 100;
 const GAME_DURATION = 60000;
 
 const PAROLE_WORDLE = ['ABITO', 'ACQUA', 'AIUTO', 'ALBUM', 'AMICO', 'ANIMA', 'AMORE', 'ARENA', 'ASPRO', 'AVERE', 'BANCO', 'BARCA', 'BARBA', 'BASSO', 'BELLO', 'BIRRA', 'BOSCO', 'BRAVO', 'BUONO', 'CALDO', 'CAFFE', 'CAMPO', 'CARNE', 'CARTA', 'CAUSA', 'CERCA', 'CERTO', 'CHINA', 'CIFRA', 'DANTE', 'DANZA', 'DENTE', 'DIECI', 'DISCO', 'DOLCE', 'DONNA', 'DRAGO', 'DUOMO', 'DITTA', 'EBANO', 'EPOCA', 'EREDE', 'EXTRA', 'ESAME', 'ENTRO', 'ELICA', 'FERRO', 'FESTA', 'FETTA', 'FIUME', 'FIORE', 'FOLLA', 'FORMA', 'FORTE', 'GATTO', 'GAMBA', 'GENTE', 'GIOCO', 'GOMMA', 'GRADO', 'GRECO', 'GUSTO', 'HOTEL', 'ISOLA', 'LATTE', 'LARGO', 'LEGGE', 'LEONE', 'LIBRO', 'LINEA', 'LISTA', 'LUNGO', 'MONDO', 'MADRE', 'MARCO', 'MASSA', 'MEZZO', 'METRO', 'MILLE', 'MONTE', 'MORTE', 'NOTTE', 'NELLO', 'NOZZE', 'NULLO', 'NUOVO', 'OLTRE', 'OPERA', 'OCCHI', 'OVEST', 'PADRE', 'PANDA', 'PARTE', 'PASTA', 'PAURA', 'PESCE', 'PIANO', 'PIZZA', 'QUOTA', 'QUASI', 'RESTO', 'RICCO', 'ROSSO', 'RUSSO', 'ROTTO', 'REGNO', 'RAZZA', 'SANTO', 'SALTO', 'SCALE', 'SENSO', 'SOLDI', 'SOTTO', 'SPESA', 'SPORT', 'TEMPO', 'TERRA', 'TORTA', 'TUTTO', 'TURNO', 'TESTA', 'UNICO', 'UMORE', 'UNITO', 'USATO', 'USCIO', 'UTILE', 'VERDE', 'VENTO', 'VINO', 'VISTA', 'VOCE', 'VOLO', 'VUOTO', 'VALLE', 'ZEBRA', 'ZITTO', 'ZUCCA', 'ZAINO', 'ZOPPO', 'ZAPPA'];
-//penso e spero siano tutte da 5 🤒
+// penso e spero siano tutte da 5 🤒
 class WordleGame {
     constructor(targetWord, playerId) {
         this.targetWord = targetWord.toUpperCase();

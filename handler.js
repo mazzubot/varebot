@@ -2,10 +2,11 @@ import { smsg } from './lib/simple.js'
 import { format } from 'util'
 import { fileURLToPath } from 'url'
 import path, { join } from 'path'
-import { unwatchFile, watchFile } from 'fs'
+import { watchFile } from 'fs'
 import chalk from 'chalk'
 import NodeCache from 'node-cache'
-import { getAggregateVotesInPollMessage, toJid } from '@realvare/based'
+import { getAggregateVotesInPollMessage } from '@realvare/based'
+import { canLevelUp } from './lib/levelling.js'
 
 global.ignoredUsersGlobal = new Set()
 global.ignoredUsersGroup = {}
@@ -15,23 +16,43 @@ if (!global.groupCache) {
     global.groupCache = new NodeCache({ stdTTL: 5 * 60, useClones: false })
 }
 if (!global.jidCache) {
-    global.jidCache = new NodeCache({ stdTTL: 600, useClones: false })
+    global.jidCache = new NodeCache({ stdTTL: 900, useClones: false })
 }
 if (!global.nameCache) {
-    global.nameCache = new NodeCache({ stdTTL: 600, useClones: false });
+    global.nameCache = new NodeCache({ stdTTL: 900, useClones: false });
 }
 
-export const fetchMetadata = async (conn, chatId) => await conn.groupMetadata(chatId)
+let PRINT_MODULE = null
+let PRINT_MODULE_PROMISE = null
+async function getPrintModule() {
+    if (PRINT_MODULE) return PRINT_MODULE
+    if (!PRINT_MODULE_PROMISE) {
+        PRINT_MODULE_PROMISE = import('./lib/print.js')
+            .then(m => (PRINT_MODULE = m))
+            .finally(() => {
+                PRINT_MODULE_PROMISE = null
+            })
+    }
+    return PRINT_MODULE_PROMISE
+}
 
-const fetchGroupMetadataWithRetry = async (conn, chatId, retries = 3, delay = 1000) => {
+const fetchGroupMetadataWithRetry = async (conn, chatId, retries = 3, delay = 1000, force = false) => {
+    const cached = global.groupCache.get(chatId);
+    if (!force && cached && Date.now() - (cached.fetchTime || 0) < 60000) return cached;
     for (let i = 0; i < retries; i++) {
         try {
-            return await conn.groupMetadata(chatId);
+            const metadata = await conn.groupMetadata(chatId);
+            if (metadata) {
+                metadata.fetchTime = Date.now();
+                global.groupCache.set(chatId, metadata, { ttl: 300 });
+                return metadata;
+            }
         } catch (e) {
             if (i === retries - 1) throw e;
-            await new Promise(resolve => setTimeout(resolve, delay));
+            await new Promise(resolve => setTimeout(resolve, delay * (i + 1)));
         }
     }
+    return null;
 }
 
 if (!global.cacheListenersSet) {
@@ -39,12 +60,25 @@ if (!global.cacheListenersSet) {
     if (conn) {
         conn.ev.on('groups.update', async (updates) => {
             for (const update of updates) {
+                if (!update || !update.id) {
+                    continue;
+                }
                 try {
                     const metadata = await fetchGroupMetadataWithRetry(conn, update.id)
                     if (!metadata) {
                         continue
                     }
                     global.groupCache.set(update.id, metadata, { ttl: 300 })
+                    if (!global.db.data) await global.loadDatabase()
+                    const chatId = update.id
+                    let chat = chatz(chatId)
+                    chat.name = metadata.subject
+                    try {
+                        chat.pfp = await conn.profilePictureUrl(chatId, 'image')
+                    } catch {
+                        chat.pfp = null
+                    }
+                    chat.membersCount = metadata.participants.length
                 } catch (e) {
                     if (!e.message?.includes('not authorized') && !e.message?.includes('chat not found') && !e.message?.includes('not in group')) {
                         console.error(`[ERRORE] Errore nell'aggiornamento cache su groups.update per ${update.id}:`, e)
@@ -80,228 +114,240 @@ if (!global.pollListenerSet) {
     }
 }
 
-const isNumber = x => typeof x === 'number' && !isNaN(x)
-const delay = ms => isNumber(ms) && new Promise(resolve => setTimeout(resolve, ms))
+const delay = ms => typeof ms === 'number' && !isNaN(ms) && new Promise(resolve => setTimeout(resolve, ms))
 const responseHandlers = new Map()
 
-function initResponseHandler(conn) {
-    if (!conn.waitForResponse) {
-        conn.waitForResponse = async (chat, sender, options = {}) => {
-            const {
-                timeout = 30000,
-                validResponses = null,
-                onTimeout = null,
-                filter = null
-            } = options
-            return new Promise((resolve) => {
-                const key = chat + sender
-                const timeoutId = setTimeout(() => {
-                    responseHandlers.delete(key)
-                    if (onTimeout) onTimeout()
-                    resolve(null)
-                }, timeout)
-                responseHandlers.set(key, {
-                    resolve,
-                    timeoutId,
-                    validResponses,
-                    filter
-                })
-            })
+const defchat = {
+    isBanned: false,
+    welcome: false,
+    goodbye: false,
+    ai: false,
+    vocali: false,
+    antiporno: false,
+    antiBot: false,
+    antitrava: false,
+    antimedia: false,
+    antioneview: false,
+    antitagall: false,
+    autotrascrizione: false,
+    autotraduzione: false,
+    autolevelup: false,
+    antivoip: false,
+    rileva: false,
+    modoadmin: false,
+    antiLink: false,
+    antiLinkUni: false,
+    antiLink2: false,
+    antiLink2_tiktok: false,
+    antiLink2_youtube: false,
+    antiLink2_telegram: false,
+    antiLink2_facebook: false,
+    antiLink2_instagram: false,
+    antiLink2_twitter: false,
+    antiLink2_discord: false,
+    antiLink2_snapchat: false,
+    antiLink2_linkedin: false,
+    antiLink2_twitch: false,
+    antiLink2_reddit: false,
+    antiLink2_onlyfans: false,
+    antiLink2_github: false,
+    reaction: false,
+    antispam: false,
+    antisondaggi: false,
+    antiparolacce: false,
+    expired: 0,
+    users: {}
+}
+
+const defsettings = {
+    autoread: false,
+    antiprivato: false,
+    soloCreatore: false,
+    antispambot: false,
+    anticall: true,
+    multiprefix: false,
+    registrazioni: false,
+    status: 0
+}
+
+const defuser = {
+    exp: 0,
+    euro: 10,
+    muto: false,
+    registered: false,
+    name: '?',
+    age: -1,
+    regTime: -1,
+    banned: false,
+    bank: 0,
+    level: 0,
+    firstTime: 0,
+    spam: 0,
+    messages: 0,
+    callWarn: 0
+}
+
+function chatz(chatId) {
+    if (!global.db?.data) return null
+    if (!global.db.data.chats) global.db.data.chats = {}
+    const existing = global.db.data.chats[chatId]
+    const base = existing && typeof existing === 'object' ? existing : {}
+    global.db.data.chats[chatId] = Object.assign({}, defchat, base)
+    return global.db.data.chats[chatId]
+}
+
+function settingz(jid) {
+    if (!global.db?.data) return null
+    if (!global.db.data.settings) global.db.data.settings = {}
+    const existing = global.db.data.settings[jid]
+    const base = existing && typeof existing === 'object' ? existing : {}
+    global.db.data.settings[jid] = Object.assign({}, defsettings, base)
+    return global.db.data.settings[jid]
+}
+
+const str2Regex = str => str.replace(/[|\\{}()[\]^$+*?.]/g, '\\$&')
+
+function escapeRegex(str) {
+    return String(str).replace(/[|\\{}()[\]^$+*?.\-\^]/g, '\\$&')
+}
+
+function applyPrefixFromSettings(settings) {
+    try {
+        const defaultPrefixChars = (global.opts?.prefix || '*/!#$%+£¢€¥^°=¶∆×÷π√✓©®&.\\-.@')
+        const defaultSinglePrefix = (typeof global.prefisso === 'string' && global.prefisso.trim()) ? global.prefisso.trim() : '.'
+        const raw = typeof settings?.prefix === 'string' ? settings.prefix.trim() : ''
+
+        if (settings?.multiprefix === true) {
+            const chars = (raw && raw.length > 1) ? raw : defaultPrefixChars
+            global.prefix = new RegExp('^[' + escapeRegex(chars) + ']')
+        } else {
+            const c = String(raw || defaultSinglePrefix)[0] || '.'
+            global.prefix = new RegExp('^' + escapeRegex(c))
         }
+    } catch {
     }
 }
 
-global.processedCalls = global.processedCalls || new Map()
-if (global.conn && global.conn.ws) {
-    global.conn.ws.on('CB:call', async (json) => {
-        try {
-            if (!json?.tag || json.tag !== 'call' || !json.attrs?.from) {
-                return
-            }
-            const callerId = global.conn.decodeJid(json.attrs.from)
-            const isOwner = global.owner.some(([num]) => num === callerId.split('@')[0])
-            if (isOwner) return
+const ___dirname = join(path.dirname(fileURLToPath(import.meta.url)), './plugins')
 
-            const eventId = json.attrs.id
-            let actualCallId = null
-            if (json.content?.length > 0) {
-                for (const item of json.content) {
-                    if (item.attrs && item.attrs['call-id']) {
-                        actualCallId = item.attrs['call-id']
-                        break
-                    }
-                }
-            }
-            const uniqueCallId = actualCallId || eventId
-            if (json.content?.length > 0) {
-                const contentTags = json.content.map(item => item.tag)
-                if (contentTags.includes('terminate')) {
-                    global.processedCalls.delete(uniqueCallId)
-                    return
-                }
-                if (contentTags.includes('relaylatency')) {
-                    if (global.processedCalls.has(uniqueCallId)) {
-                        return
-                    }
-                    global.processedCalls.set(uniqueCallId, true)
-
-                    const numero = callerId.split('@')[0]
-                    let nome = global.nameCache.get(callerId);
-                    if (!nome) {
-                      nome = global.conn.getName(callerId) || 'Sconosciuto'
-                      global.nameCache.set(callerId, nome);
-                    }
-                    console.log(`[📞] chiamata in arrivo da ${numero} - ${nome}`)
-
-                    if (!global.db.data) await global.loadDatabase()
-                    let settings = global.db.data?.settings?.[global.conn.user.jid]
-                    if (!settings) {
-                        settings = global.db.data.settings[global.conn.user.jid] = {
-                            self: false,
-                            restrict: true,
-                            jadibotmd: false,
-                            antiPrivate: true,
-                            soloCreatore: false,
-                            anticall: true,
-                            status: 0
-                        }
-                    }
-                    if (!settings.anticall) return
-
-                    let user = global.db.data.users[callerId] || (global.db.data.users[callerId] = { callCount: 0, banned: false })
-                    if (user.banned) {
-                        await global.conn.rejectCall(uniqueCallId, callerId)
-                        return
-                    }
-                    user.callCount = (user.callCount || 0) + 1
-                    try {
-                        await global.conn.rejectCall(uniqueCallId, callerId)
-                        console.log(`[📞] chiamata di ${numero} - ${nome} rifiutata`)
-                        if (user.callCount >= 3) {
-                            user.banned = true
-                            user.bannedReason = 'Troppi tentativi di chiamata'
-                            const msg = `🚫 Quanto puoi essere sfigato per spammare di call smh.`
-                            await global.conn.sendMessage(toJid(callerId), { text: msg })
-                        } else {
-                            const msg = `🚫 Chiamata rifiutata automaticamente, non chiamare il bot.`
-                            await global.conn.sendMessage(toJid(callerId), { text: msg })
-                        }
-                    } catch (err) {
-                        console.error('[ERRORE] Errore nel gestire la chiamata:', err)
-                        global.processedCalls.delete(uniqueCallId)
-                    }
-                }
-            }
-        } catch (e) {
-            console.error('[ERRORE] Errore generale gestione chiamata:', e)
-        }
+function normalizeParticipants(conn, participants) {
+    return participants.map(u => {
+        const normalizedId = conn.decodeJid(u.id)
+        return { ...u, id: normalizedId, jid: u.jid || normalizedId }
     })
 }
 
-setInterval(() => {
-    if (global.processedCalls.size > 10) {
-        global.processedCalls.clear()
-    }
+function computeAdminFlags(conn, participants, groupMetadata, normalizedSender, normalizedBot) {
+    const normalizedOwner = groupMetadata.owner ? conn.decodeJid(groupMetadata.owner) : null
+    const normalizedOwnerLid = groupMetadata.ownerLid ? conn.decodeJid(groupMetadata.ownerLid) : null
+    const isAdmin = checkAdminStatus(conn, participants, normalizedSender)
+    const isBotAdmin = checkAdminStatus(conn, participants, normalizedBot) || (normalizedBot === normalizedOwner || normalizedBot === normalizedOwnerLid)
+    const isRAdmin = isAdmin && (normalizedSender === normalizedOwner || normalizedSender === normalizedOwnerLid)
+    return { isAdmin, isBotAdmin, isRAdmin }
+}
 
-}, 180000)
+let _cachedModsSet = null
+let _cachedModsSource = null
+let _cachedPremsSet = null
+let _cachedPremsSource = null
 
-export async function participantsUpdate({ id, participants, action }) {
-    if (global.db.data.chats[id]?.rileva === false) return
+function buildModsSet() {
+    const current = global.mods || []
+    if (_cachedModsSet && _cachedModsSource === current) return _cachedModsSet
+    _cachedModsSource = current
+    _cachedModsSet = new Set(current.map(v => v.replace(/[^0-9]/g, '') + '@s.whatsapp.net'))
+    return _cachedModsSet
+}
 
-    try {
-        let metadata = global.groupCache.get(id) || await fetchMetadata(this, id)
-        if (!metadata) return
+function buildPremsSet() {
+    const current = global.prems || []
+    if (_cachedPremsSet && _cachedPremsSource === current) return _cachedPremsSet
+    _cachedPremsSource = current
+    _cachedPremsSet = new Set(current.map(v => v.replace(/[^0-9]/g, '') + '@s.whatsapp.net'))
+    return _cachedPremsSet
+}
 
-        global.groupCache.set(id, metadata, { ttl: 300 })
-        for (const user of participants) {
-            const normalizedUser = this.decodeJid(user)
-            let userName = global.nameCache.get(normalizedUser);
-            if (!userName) {
-              userName = (await this.getName(normalizedUser)) || normalizedUser.split('@')[0] || 'Sconosciuto'
-              global.nameCache.set(normalizedUser, userName);
-            }
-            switch (action) {
-                case 'add':
-                    break
-                case 'remove':
-                    break
-                case 'promote':
-                    break
-                case 'demote':
-                    break
-            }
-        }
-    } catch (e) {
-        console.error(`[ERRORE] Errore in participantsUpdate per ${id}:`, e)
-    }
+function checkAdminStatus(conn, participants, targetJid) {
+    return participants.some(u => {
+        const participantIds = [
+            conn.decodeJid(u.id),
+            u.jid ? conn.decodeJid(u.jid) : null,
+            u.lid ? conn.decodeJid(u.lid) : null
+        ].filter(Boolean)
+        return participantIds.includes(targetJid) && (u.admin === 'admin' || u.admin === 'superadmin' || u.isAdmin === true || u.admin === true)
+    })
 }
 
 export async function handler(chatUpdate) {
     this.msgqueque = this.msgqueque || []
     this.uptime = this.uptime || Date.now()
     if (!chatUpdate) return
-    this.pushMessage(chatUpdate.messages).catch(console.error)
+
+    if (Array.isArray(chatUpdate.messages) && chatUpdate.messages.length > 1) {
+        for (const msg of chatUpdate.messages) {
+            try {
+                await handler.call(this, { ...chatUpdate, messages: [msg] })
+            } catch (e) {
+                console.error('[ERRORE] Errore nel processare un messaggio del batch messages.upsert:', e)
+            }
+        }
+        return
+    }
+
     let m = chatUpdate.messages[chatUpdate.messages.length - 1]
     if (!m) return
-if (m.message?.protocolMessage?.type === 'MESSAGE_EDIT') {
-    const key = m.message.protocolMessage.key;
-    const editedMessage = m.message.protocolMessage.editedMessage;
-    m.key = key;
-    m.message = editedMessage;
-    m.text = editedMessage.conversation || editedMessage.extendedTextMessage?.text || '';
-    m.mtype = Object.keys(editedMessage)[0];
-    console.log(`[EDIT] Messaggio ${key.id} modificato in ${key.remoteJid}`);
-}
-    m = smsg(this, m, global.store)
+    try {
+        const printer = await getPrintModule()
+        if (typeof printer?.ensureMessageUpdateListener === 'function') printer.ensureMessageUpdateListener(this)
+    } catch {
+    }
+    this.pushMessage(chatUpdate.messages).catch(console.error)
+    m = smsg(this, m)
     if (!m || !m.key || !m.chat || !m.sender) return
-    if (m.fromMe) return
+    if (m.isBaileys) return
     if (m.key.participant && m.key.participant.includes(':') && m.key.participant.split(':')[1]?.includes('@')) return
-
     if (m.key) {
         m.key.remoteJid = this.decodeJid(m.key.remoteJid)
         if (m.key.participant) m.key.participant = this.decodeJid(m.key.participant)
     }
-    if (!m.key.remoteJid) return
-    if (!this.originalGroupParticipantsUpdate) {
-        this.originalGroupParticipantsUpdate = this.groupParticipantsUpdate
-        this.groupParticipantsUpdate = async function(chatId, users, action) {
-            try {
-                let metadata = global.groupCache.get(chatId)
-                if (!metadata) {
-                    metadata = await fetchMetadata(this, chatId)
-                    if (metadata) global.groupCache.set(chatId, metadata, { ttl: 300 })
-                }
-                if (!metadata) {
-                    console.error('[ERRORE] Nessun metadato del gruppo disponibile per un aggiornamento sicuro')
-                    return this.originalGroupParticipantsUpdate.call(this, chatId, users, action)
-                }
+    if (!global.db.data) await global.loadDatabase()
+    m.exp = 0
+    m.euro = false
+    m.isCommand = false
 
-                const correctedUsers = users.map(userJid => {
-                    const decoded = this.decodeJid(userJid)
-                    const phone = decoded.split('@')[0].replace(/:\d+$/, '')
-                    const participant = metadata.participants.find(p => {
-                        const pId = this.decodeJid(p.id)
-                        const pPhone = pId.split('@')[0].replace(/:\d+$/, '')
-                        return pPhone === phone
-                    })
-                    return participant ? participant.id : userJid
-                })
-
-                return this.originalGroupParticipantsUpdate.call(this, chatId, correctedUsers, action)
-            } catch (e) {
-                console.error('[ERRORE] Errore in safeGroupParticipantsUpdate:', e)
-                throw e
+    try {
+        const normalizedSenderEarly = this.decodeJid(m.sender)
+        const pendingKey = m.chat + normalizedSenderEarly
+        const pending = responseHandlers.get(pendingKey)
+        if (pending) {
+            const text = (m.text || '').trim()
+            const passFilter = typeof pending.filter === 'function' ? await pending.filter(m) : true
+            let passValid = true
+            if (pending.validResponses) {
+                if (pending.validResponses instanceof RegExp) {
+                    passValid = pending.validResponses.test(text)
+                } else if (Array.isArray(pending.validResponses)) {
+                    passValid = pending.validResponses.includes(text)
+                } else if (typeof pending.validResponses === 'function') {
+                    passValid = await pending.validResponses(m)
+                }
+            }
+            if (passFilter && passValid) {
+                if (pending.timeoutId) clearTimeout(pending.timeoutId)
+                responseHandlers.delete(pendingKey)
+                pending.resolve(m)
+                return
             }
         }
+    } catch {
     }
-
-    initResponseHandler(this)
 
     let user = null
     let chat = null
     let usedPrefix = null
+    let normalizedSender = null
+    let normalizedBot = null
     try {
-        let eventHandled = false
         if (m.message?.eventResponseMessage) {
             const { eventId, response } = m.message.eventResponseMessage
             const jid = this.decodeJid(m.key.remoteJid)
@@ -320,7 +366,6 @@ if (m.message?.protocolMessage?.type === 'MESSAGE_EDIT') {
                     } else {
                         eventData.participants.delete(userId)
                     }
-                    eventHandled = true
                 }
             } catch (e) {
                 console.error('[ERRORE] Errore nel gestire eventResponseMessage:', e)
@@ -352,65 +397,19 @@ if (m.message?.protocolMessage?.type === 'MESSAGE_EDIT') {
             }
         }
 
-        if (!global.db.data) await global.loadDatabase()
-        m.exp = 0
-        m.euro = false
-        m.isCommand = false
-
-        const normalizedSender = this.decodeJid(m.sender)
-        const normalizedBot = this.decodeJid(this.user.jid)
-        if (!normalizedSender) return;
+        normalizedSender = this.decodeJid(m.sender)
+        normalizedBot = this.decodeJid(this.user.jid)
+        if (!normalizedSender || normalizedSender.endsWith('@lid')) return;
         user = global.db.data.users[normalizedSender] || (global.db.data.users[normalizedSender] = {
-            exp: 0,
-            euro: 10,
-            muto: false,
-            registered: false,
+            ...defuser,
             name: m.pushName || '?',
-            age: -1,
-            regTime: -1,
-            banned: false,
-            useDocument: false,
-            bank: 0,
-            level: 0,
-            firstTime: Date.now(),
-            spam: 0
+            firstTime: Date.now()
         })
-        chat = global.db.data.chats[m.chat] || (global.db.data.chats[m.chat] = {
-            isBanned: false,
-            welcome: false,
-            goodbye: false,
-            antiporno: false,
-            antioneview: false,
-            autolevelup: false,
-            antidelete: false,
-            antivoip: false,
-            rileva: false,
-            modoadmin: false,
-            antiLink: false,
-            antiLink2: false,
-            reaction: false,
-            antispam: false,
-            expired: 0,
-            users: {}
-        })
-
-
-
-        let settings = global.db.data.settings[this.user.jid] || (global.db.data.settings[this.user.jid] = {
-            self: false,
-            restrict: true,
-            jadibotmd: false,
-            antiPrivate: true,
-            soloCreatore: false,
-            status: 0
-        })
-
-
-
-
+        chat = chatz(m.chat)
+        let settings = settingz(this.decodeJid(this.user.jid))
+        applyPrefixFromSettings(settings)
         if (m.mtype === 'pollUpdateMessage') return
         if (m.mtype === 'reactionMessage') return
-
         let groupMetadata = m.isGroup ? global.groupCache.get(m.chat) : null
         let participants = null
         let normalizedParticipants = null
@@ -418,88 +417,29 @@ if (m.message?.protocolMessage?.type === 'MESSAGE_EDIT') {
         let isAdmin = false
         let isRAdmin = false
         let isSam = global.owner.some(([num]) => num + '@s.whatsapp.net' === normalizedSender)
-        let isROwner = isSam || global.owner.some(([num]) => num + '@s.whatsapp.net' === normalizedSender)
-        let isOwner = isROwner || m.fromMe
-        let isMods = isOwner || global.mods?.map(v => v.replace(/[^0-9]/g, '') + '@s.whatsapp.net').includes(normalizedSender) || false
-        let isPrems = isROwner || global.prems?.map(v => v.replace(/[^0-9]/g, '') + '@s.whatsapp.net').includes(normalizedSender) || false
-
+        let isOwner = isSam || m.fromMe
+        const modsSet = buildModsSet()
+        const premsSet = buildPremsSet()
+        let isMods = isOwner || modsSet.has(normalizedSender)
+        let isPrems = isSam || premsSet.has(normalizedSender)
         if (m.isGroup) {
             if (!groupMetadata) {
-                groupMetadata = await fetchGroupMetadataWithRetry(this, m.chat)
+                groupMetadata = await fetchGroupMetadataWithRetry(this, m.chat, 3, 1000)
                 if (groupMetadata) {
                     groupMetadata.fetchTime = Date.now()
                     global.groupCache.set(m.chat, groupMetadata, { ttl: 300 })
                 }
             }
-
             if (groupMetadata) {
                 participants = groupMetadata.participants
-                normalizedParticipants = participants.map(u => {
-                    const normalizedId = this.decodeJid(u.id)
-                    return { ...u, id: normalizedId, jid: u.jid || normalizedId }
-                })
-
-                const normalizedOwner = groupMetadata.owner ? this.decodeJid(groupMetadata.owner) : null
-                const normalizedOwnerLid = groupMetadata.ownerLid ? this.decodeJid(groupMetadata.ownerLid) : null
-
-                isAdmin = participants.some(u => {
-                    const participantIds = [
-                        this.decodeJid(u.id),
-                        u.jid ? this.decodeJid(u.jid) : null,
-                        u.lid ? this.decodeJid(u.lid) : null
-                    ].filter(Boolean)
-                    const isMatch = participantIds.includes(normalizedSender)
-                    return isMatch && (u.admin === 'admin' || u.admin === 'superadmin' || u.isAdmin === true || u.admin === true)
-                })
-
-                isBotAdmin = participants.some(u => {
-                    const participantIds = [
-                        this.decodeJid(u.id),
-                        u.jid ? this.decodeJid(u.jid) : null,
-                        u.lid ? this.decodeJid(u.lid) : null
-                    ].filter(Boolean)
-                    const isMatch = participantIds.includes(normalizedBot)
-                    return isMatch && (u.admin === 'admin' || u.admin === 'superadmin' || u.isAdmin === true || u.admin === true)
-                }) || (normalizedBot === normalizedOwner || normalizedBot === normalizedOwnerLid)
-
-                isRAdmin = isAdmin && (normalizedSender === normalizedOwner || normalizedSender === normalizedOwnerLid)
-
-                if (m.isGroup && !isAdmin) {
-                    const secondMetadata = await fetchGroupMetadataWithRetry(this, m.chat)
-                    if (secondMetadata) {
-                        secondMetadata.fetchTime = Date.now()
-                        global.groupCache.set(m.chat, secondMetadata, { ttl: 300 })
-                        participants = secondMetadata.participants
-                        normalizedParticipants = participants.map(u => {
-                            const normalizedId = this.decodeJid(u.id)
-                            return { ...u, id: normalizedId, jid: u.jid || normalizedId }
-                        })
-
-                        isAdmin = participants.some(u => {
-                            const participantIds = [
-                                this.decodeJid(u.id),
-                                u.jid ? this.decodeJid(u.jid) : null,
-                                u.lid ? this.decodeJid(u.lid) : null
-                            ].filter(Boolean)
-                            const isMatch = participantIds.includes(normalizedSender)
-                            return isMatch && (u.admin === 'admin' || u.admin === 'superadmin' || u.isAdmin === true || u.admin === true)
-                        })
-
-                        isBotAdmin = participants.some(u => {
-                            const participantIds = [
-                                this.decodeJid(u.id),
-                                u.jid ? this.decodeJid(u.jid) : null,
-                                u.lid ? this.decodeJid(u.lid) : null
-                            ].filter(Boolean)
-                            const isMatch = participantIds.includes(normalizedBot)
-                            return isMatch && (u.admin === 'admin' || u.admin === 'superadmin' || u.isAdmin === true || u.admin === true)
-                        }) || (normalizedBot === normalizedOwner || normalizedBot === normalizedOwnerLid)
-                    }
-                }
+                normalizedParticipants = normalizeParticipants(this, participants)
+                const adminFlags = computeAdminFlags(this, participants, groupMetadata, normalizedSender, normalizedBot)
+                isAdmin = adminFlags.isAdmin
+                isBotAdmin = adminFlags.isBotAdmin
+                isRAdmin = adminFlags.isRAdmin
             }
         }
 
-        const ___dirname = join(path.dirname(fileURLToPath(import.meta.url)), './plugins')
         for (let name in global.plugins) {
             let plugin = global.plugins[name]
             if (!plugin) continue
@@ -517,9 +457,6 @@ if (m.message?.protocolMessage?.type === 'MESSAGE_EDIT') {
                 }
             }
 
-            if (!global.opts['restrict'] && plugin.tags?.includes('admin')) continue
-
-            const str2Regex = str => str.replace(/[|\\{}()[\]^$+*?.]/g, '\\$&')
             let _prefix = plugin.customPrefix || global.prefix || '.'
             let match = (_prefix instanceof RegExp ? [[_prefix.exec(m.text), _prefix]] :
                 Array.isArray(_prefix) ? _prefix.map(p => [p instanceof RegExp ? p : new RegExp(str2Regex(p)).exec(m.text), p]) :
@@ -535,7 +472,6 @@ if (m.message?.protocolMessage?.type === 'MESSAGE_EDIT') {
                     user: { admin: isAdmin ? 'admin' : null },
                     bot: { admin: isBotAdmin ? 'admin' : null },
                     isSam,
-                    isROwner,
                     isOwner,
                     isRAdmin,
                     isAdmin,
@@ -548,14 +484,11 @@ if (m.message?.protocolMessage?.type === 'MESSAGE_EDIT') {
             }
 
             if (typeof plugin !== 'function') continue
-            
             if (!match || !match[0]) continue
-
             usedPrefix = (match[0] || '')[0]
             if (usedPrefix) {
                 let noPrefix = m.text.replace(usedPrefix, '')
                 let [command, ...args] = noPrefix.trim().split` `.filter(v => v)
-                args = args || []
                 let _args = noPrefix.trim().split` `.slice(1)
                 let text = _args.join` `
                 command = command?.toLowerCase() || ''
@@ -563,45 +496,32 @@ if (m.message?.protocolMessage?.type === 'MESSAGE_EDIT') {
                 let isAccept = plugin.command instanceof RegExp ? plugin.command.test(command) :
                     Array.isArray(plugin.command) ? plugin.command.some(cmd => cmd instanceof RegExp ? cmd.test(command) : cmd === command) :
                     typeof plugin.command === 'string' ? plugin.command === command : false
-
                 if (!isAccept) continue
-
                 if (m.isGroup && (plugin.admin || plugin.botAdmin)) {
-                    const freshMetadata = global.groupCache.get(m.chat) || await fetchGroupMetadataWithRetry(this, m.chat)
-                    if (freshMetadata) {
-                        freshMetadata.fetchTime = Date.now()
-                        global.groupCache.set(m.chat, freshMetadata, { ttl: 300 })
-                        groupMetadata = freshMetadata
+                    const cachedMeta = global.groupCache.get(m.chat)
+                    const isFresh = cachedMeta && cachedMeta.fetchTime && (Date.now() - cachedMeta.fetchTime < 30000)
+                    if (!isFresh) {
+                        const freshMetadata = await this.groupMetadata(m.chat).catch(_ => null)
+                        if (freshMetadata) {
+                            groupMetadata = freshMetadata
+                            groupMetadata.fetchTime = Date.now()
+                            global.groupCache.set(m.chat, groupMetadata, { ttl: 300 })
+
+                            participants = groupMetadata.participants
+                            normalizedParticipants = normalizeParticipants(this, participants)
+                            const adminFlags = computeAdminFlags(this, participants, groupMetadata, normalizedSender, normalizedBot)
+                            isAdmin = adminFlags.isAdmin
+                            isBotAdmin = adminFlags.isBotAdmin
+                            isRAdmin = adminFlags.isRAdmin
+                        }
+                    } else {
+                        groupMetadata = cachedMeta
                         participants = groupMetadata.participants
-                        normalizedParticipants = participants.map(u => {
-                            const normalizedId = this.decodeJid(u.id)
-                            return { ...u, id: normalizedId, jid: u.jid || normalizedId }
-                        })
-
-                        const normalizedOwner = groupMetadata.owner ? this.decodeJid(groupMetadata.owner) : null
-                        const normalizedOwnerLid = groupMetadata.ownerLid ? this.decodeJid(groupMetadata.ownerLid) : null
-
-                        isAdmin = participants.some(u => {
-                            const participantIds = [
-                                this.decodeJid(u.id),
-                                u.jid ? this.decodeJid(u.jid) : null,
-                                u.lid ? this.decodeJid(u.lid) : null
-                            ].filter(Boolean)
-                            const isMatch = participantIds.includes(normalizedSender)
-                            return isMatch && (u.admin === 'admin' || u.admin === 'superadmin' || u.isAdmin === true || u.admin === true)
-                        })
-
-                        isBotAdmin = participants.some(u => {
-                            const participantIds = [
-                                this.decodeJid(u.id),
-                                u.jid ? this.decodeJid(u.jid) : null,
-                                u.lid ? this.decodeJid(u.lid) : null
-                            ].filter(Boolean)
-                            const isMatch = participantIds.includes(normalizedBot)
-                            return isMatch && (u.admin === 'admin' || u.admin === 'superadmin' || u.isAdmin === true || u.admin === true)
-                        }) || (normalizedBot === normalizedOwner || normalizedBot === normalizedOwnerLid)
-
-                        isRAdmin = isAdmin && (normalizedSender === normalizedOwner || normalizedSender === normalizedOwnerLid)
+                        normalizedParticipants = normalizeParticipants(this, participants)
+                        const adminFlags = computeAdminFlags(this, participants, groupMetadata, normalizedSender, normalizedBot)
+                        isAdmin = adminFlags.isAdmin
+                        isBotAdmin = adminFlags.isBotAdmin
+                        isRAdmin = adminFlags.isRAdmin
                     }
                 }
 
@@ -610,65 +530,15 @@ if (m.message?.protocolMessage?.type === 'MESSAGE_EDIT') {
                     continue
                 }
 
-                if (user.muto && !isROwner && !isOwner) {
+                if (user.muto && !isSam && !isOwner) {
                     await this.sendMessage(m.chat, { text: `🚫 Sei stato mutato, non puoi usare i comandi.` }, { quoted: m }).catch(e => console.error('[ERRORE] Errore nell\'invio del messaggio:', e))
                     return
                 }
 
-                const ignoredGlobally = global.ignoredUsersGlobal.has(normalizedSender)
-                const ignoredInGroup = m.isGroup && global.ignoredUsersGroup[m.chat]?.has(normalizedSender)
-                if ((ignoredGlobally || ignoredInGroup) && !isROwner) {
-                    await this.sendMessage(m.chat, { text: `🚫 Non sei autorizzato a usare comandi.` }, { quoted: m }).catch(e => console.error('[ERRORE] Errore nell\'invio del messaggio:', e))
-                    return
-                }
-
-                m.plugin = name
-                if (chat.isBanned && !isROwner && !['gp-sbanchat.js', 'creatore-exec.js', 'gp-delete.js'].includes(name)) return
-                if (user.banned && !isROwner && name !== 'creatore-banuser.js') {
-                    if (user.antispam > 2) return
-                    await this.sendMessage(m.chat, {
-                        text: `🚫 *Sei stato bannato/a dall'utilizzo del bot*.\n\n${user.bannedReason ? `🥀 Motivo: ${user.bannedReason}` : `🥀 Motivo: Non specificato ma meritato`}\n\n⚠️ Contatta il creatore con *${usedPrefix}segnala* per problemi.`
-                    }, { quoted: m }).catch(e => console.error('[ERRORE] Errore nell\'invio del messaggio:', e))
-                    user.antispam++
-                    return
-                }
-
-                if (m.isGroup && !isOwner && !isROwner && !isAdmin && chat.antispam) {
-                    const groupData = global.groupSpam[m.chat] || (global.groupSpam[m.chat] = {
-                        count: 0,
-                        firstCommandTimestamp: 0,
-                        isSuspended: false
-                    })
-                    const now = Date.now()
-                    if (groupData.isSuspended) return
-
-                    if (now - groupData.firstCommandTimestamp > 60000) {
-                        groupData.count = 1
-                        groupData.firstCommandTimestamp = now
-                    } else {
-                        groupData.count++
-                    }
-
-                    if (groupData.count > 8) {
-                        groupData.isSuspended = true
-                        await this.reply(m.chat, `『 ⚠️ 』 \`Anti-spam comandi\`\n\n> Rilevati troppi comandi in un minuto, aspettate \`15 secondi\` prima di riutilizzare i comandi.\n\n*ℹ️ Gli admin del gruppo sono esenti da questo limite.*`, m).catch(e => console.error('[ERRORE] Errore nell\'invio della risposta:', e))
-                        setTimeout(() => {
-                            delete global.groupSpam[m.chat]
-                            console.log(`[Anti-Spam] Comandi riattivati per il gruppo: ${m.chat}`)
-                        }, 15000)
-                        return
-                    }
-                }
-
-                if (chat.modoadmin && !isOwner && !isROwner && m.isGroup && !isAdmin) return
-                if (settings.soloCreatore && !isROwner) return
-
+                if (chat.modoadmin && !isOwner && !isSam && m.isGroup && !isAdmin) return
+                if (settings.soloCreatore && !isSam) return // isSam è il vecchio isRowner
                 if (plugin.sam && !isSam) {
                     fail('sam', m, this)
-                    continue
-                }
-                if (plugin.rowner && !isROwner) {
-                    fail('rowner', m, this)
                     continue
                 }
                 if (plugin.owner && !isOwner) {
@@ -699,12 +569,43 @@ if (m.message?.protocolMessage?.type === 'MESSAGE_EDIT') {
                     fail('private', m, this)
                     continue
                 }
-                if (plugin.register && !user.registered) {
+                if (plugin.register && settings.registrazioni && !user.registered) {
                     fail('unreg', m, this)
                     continue
                 }
 
                 m.isCommand = true
+
+                const COMMAND_SPAM_WINDOW_MS = 60000
+                const COMMAND_SPAM_MAX = 8
+                const COMMAND_SPAM_SUSPEND_MS = 15000
+
+                if (m.isGroup && !isOwner && !isSam && !isMods && !isAdmin && ((settings.antispambot || chat.antispambot) || chat.antispam)) {
+                    const groupData = global.groupSpam[m.chat] || (global.groupSpam[m.chat] = {
+                        count: 0,
+                        firstCommandTimestamp: 0,
+                        isSuspended: false
+                    })
+                    const now = Date.now()
+                    if (groupData.isSuspended) continue
+
+                    if (now - groupData.firstCommandTimestamp > COMMAND_SPAM_WINDOW_MS) {
+                        groupData.count = 1
+                        groupData.firstCommandTimestamp = now
+                    } else {
+                        groupData.count++
+                    }
+
+                    if (groupData.count > COMMAND_SPAM_MAX) {
+                        groupData.isSuspended = true
+                        this.reply(m.chat, `『 ⚠️ 』 \`Anti-spam comandi\`\n\n> Rilevati troppi comandi in un minuto, aspettate \`15 secondi\` prima di riutilizzare i comandi.\n\n*ℹ️ Gli admin del gruppo sono esenti da questo limite.*`, m).catch(() => {})
+                        setTimeout(() => {
+                            delete global.groupSpam[m.chat]
+                        }, COMMAND_SPAM_SUSPEND_MS)
+                        continue
+                    }
+                }
+
                 let xp = 'exp' in plugin ? parseInt(plugin.exp) : 17
                 if (xp > 200) {
                     await this.reply(m.chat, 'bzzzzz', m).catch(e => console.error('[ERRORE] Errore nella risposta:', e))
@@ -731,7 +632,6 @@ if (m.message?.protocolMessage?.type === 'MESSAGE_EDIT') {
                     user: { admin: isAdmin ? 'admin' : null },
                     bot: { admin: isBotAdmin ? 'admin' : null },
                     isSam,
-                    isROwner,
                     isOwner,
                     isRAdmin,
                     isAdmin,
@@ -748,7 +648,7 @@ if (m.message?.protocolMessage?.type === 'MESSAGE_EDIT') {
                 } catch (e) {
                     m.error = e
                     console.error(`[ERRORE] Errore nell'esecuzione del plugin per la chat ${m.chat}, mittente ${m.sender}:`, e)
-                    if (e.message.includes('rate-overlimit')) {
+                    if (e?.message?.includes('rate-overlimit')) { // ultimamente il rate limit è stato calato un sacco da zozzap
                         console.warn('[AVVISO] Rate limit raggiunto, ritento dopo 2 secondi...')
                         await delay(2000)
                     }
@@ -775,37 +675,48 @@ if (m.message?.protocolMessage?.type === 'MESSAGE_EDIT') {
         if (m && user && user.muto && !m.fromMe) {
             await this.sendMessage(m.chat, { delete: m.key }).catch(e => console.error('[ERRORE] Errore nell\'eliminazione del messaggio:', e))
         }
-
         if (m && user) {
-            user.exp += m.exp || 0
-            user.euro -= m.euro * 1 || 0
+            user.exp = Number(user.exp)
+            if (!Number.isFinite(user.exp) || user.exp < 0) user.exp = 0
+            user.euro = Number(user.euro)
+            if (!Number.isFinite(user.euro)) user.euro = 0
 
-            if (m.plugin) {
-                let stats = global.db.data.stats || (global.db.data.stats = {})
-                let stat = stats[m.plugin] || (stats[m.plugin] = {
-                    total: 0,
-                    success: 0,
-                    last: 0,
-                    lastSuccess: 0
-                })
-                const now = +new Date
-                stat.total += 1
-                stat.last = now
-                if (!m.error) {
-                    stat.success += 1
-                    stat.lastSuccess = now
+            if (chat && chat.autolevelup && !m.fromMe && !m.isCommand) {
+                const earned = 1 + Math.floor(Math.random() * 3)
+                user.exp += earned
+            }
+
+            user.exp += Number(m.exp) || 0
+            user.euro -= Number(m.euro) || 0
+            if (!user.messages) user.messages = 0;
+            user.messages++;
+
+            user.level = Number(user.level)
+            if (!Number.isFinite(user.level) || user.level < 0) user.level = 0
+            while (chat && chat.autolevelup && canLevelUp(user.level, user.exp, global.multiplier)) {
+                user.level++
+            }
+            if (m.isGroup) {
+                if (!chat.users) chat.users = {};
+                const senderId = normalizedSender;
+                if (!chat.users[senderId]) {
+                    chat.users[senderId] = { messages: 0 };
                 }
+                chat.users[senderId].messages++;
             }
         }
 
         try {
-            if (!global.opts['noprint'] && m) await (await import(`./lib/print.js`)).default(m, this)
+            if (!global.opts['noprint'] && m) {
+                const printer = await getPrintModule()
+                if (typeof printer?.default === 'function') await printer.default(m, this)
+            }
         } catch (e) {
             console.error('[ERRORE] Errore in print:', e)
         }
 
-        let settingsREAD = global.db.data.settings[this.user.jid] || {}
-        if ((global.opts['autoread'] || settingsREAD.autoread2) && m) {
+        let settingsREAD = global.db.data.settings[this.decodeJid(this.user.jid)] || {}
+        if ((global.opts['autoread'] || settingsREAD.autoread || settingsREAD.autoread2) && m) {
             await this.readMessages([m.key]).catch(e => console.error('[ERRORE] Errore nella lettura del messaggio:', e))
         }
 
@@ -823,16 +734,14 @@ global.dfail = async (type, m, conn) => {
     const etarandom = Math.floor(Math.random() * 21) + 13
     const msg = {
         sam: '- 〘 🔒 〙 *`ꪶ͢Comando riservato esclusivamente al creatoreꫂ`*',
-        rowner: '- 〘 👑 〙- *`ꪶ͢Solo il creatore del bot può usare questa funzioneꫂ`*',
         owner: '- 〘 🛡️ 〙 *`ꪶ͢Solo gli owner del bot possono usare questa funzioneꫂ`*',
         mods: '- 〘 ⚙️ 〙 *`ꪶ͢Solo i moderatori possono usare questo comandoꫂ`*',
         premium: '- 〘 💎 〙 *`ꪶ͢Solo gli utenti premium possono usare questo comandoꫂ`*',
-        group: '- 〘 👥 〙 *`ꪶ͢Questo comando va usato solo nei gruppiꫂ`*',
-        private: '- 〘 📩 〙 *`ꪶ͢Questa funzione può essere usata solo in privatoꫂ`*',
+        group: '- 〘 👥 〙 *`ꪶ͢Questo comando può essere usato solo nei gruppiꫂ`*',
+        private: '- 〘 📩 〙 *`ꪶ͢Questo comando può essere usato solo in chat privataꫂ`*',
         admin: '- 〘 🛠️ 〙 *`ꪶ͢Solo gli admin del gruppo possono usare questo comandoꫂ`*',
         botAdmin: '- 〘 🤖 〙 *`ꪶ͢Devo essere admin per eseguire questo comandoꫂ`*',
         unreg: `- 〘 📛 〙 *\`ꪶ͢Non sei registrato/a, registrati per usare questa funzioneꫂ\`*\n> *\`ꪶ͢Formato: nome etàꫂ\`*\n\n *_esempio:_*\n *\`.reg ${nome} ${etarandom}\`*`,
-        restrict: '- 〘 🚫 〙 *`ꪶ͢Questa funzione è attualmente disattivataꫂ`*',
         disabled: '- 〘 🚫 〙 *`ꪶ͢Questo comando è attualmente disabilitatoꫂ`*'
     }[type]
     if (msg) {
@@ -844,8 +753,7 @@ function pickRandom(list) {
     return list[Math.floor(Math.random() * list.length)]
 }
 
-let file = global.__filename(import.meta.url, true)
-watchFile(file, async () => { 
-    unwatchFile(file)     
+let file = typeof global.__filename === 'function' ? global.__filename(import.meta.url, true) : fileURLToPath(import.meta.url)
+watchFile(file, () => {
     console.log(chalk.bgHex('#3b0d95')(chalk.white.bold("File: 'handler.js' Aggiornato")))
 })

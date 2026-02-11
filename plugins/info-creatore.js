@@ -6,7 +6,7 @@ let handler = async (m, { conn }) => {
         samakavare += `- \`Ecco tutte le informazioni  per contattarmi:\`\n\n`
         samakavare += `『 📌 』 _*CONTATTI:*_\n`
         samakavare += `┌─⭓ \`Nome:\`\n  *˙⋆✮*     *Sam aka Vare*\n`
-        samakavare += `├─⭓ \`Numero:\`\n  *˙⋆✮*     *wa.me/393476686131*\n`
+        samakavare += `├─⭓ \`Numero:\`\n  *˙⋆✮*     *wa.me/393514357738*\n`
         samakavare += `├─⭓ \`Email:\`\n  *˙⋆✮*     *samakavare1@gmail.com*\n`
         samakavare += `├─⭓ \`Instagram:\`\n  *˙⋆✮*     *samakavare*\n`
         samakavare += `├─⭓ \`GitHub:\`\n  *˙⋆✮*     *realvare*`
@@ -27,7 +27,7 @@ let handler = async (m, { conn }) => {
                     name: 'cta_url',
                     buttonParamsJson: JSON.stringify({
                         display_text: '💬 WhatsApp',
-                        url: 'https://wa.me/393476686131'
+                        url: 'https://wa.me/393514357738'
                     })
                 },
                 {
@@ -66,7 +66,7 @@ let handler = async (m, { conn }) => {
             samakavare += `- \`Ecco tutte le mie info per contattarmi:\`\n\n`
             samakavare += `『 📌 』 _*CONTATTI:*_\n`
             samakavare += `┌─⭓ \`Nome:\`\n  *˙⋆✮*     *Sam aka Vare*\n`
-            samakavare += `├─⭓ \`Numero:\`\n  *˙⋆✮*     *wa.me/393476686131*\n`
+            samakavare += `├─⭓ \`Numero:\`\n  *˙⋆✮*     *wa.me/393514357738*\n`
             samakavare += `├─⭓ \`Email:\`\n  *˙⋆✮*     *samakavare1@gmail.com*\n`
             samakavare += `├─⭓ \`Instagram:\`\n  *˙⋆✮*     *samakavare*\n`
             samakavare += `├─⭓ \`GitHub:\`\n  *˙⋆✮*     *realvare*`
@@ -83,7 +83,7 @@ let handler = async (m, { conn }) => {
                     name: 'cta_url',
                     buttonParamsJson: JSON.stringify({
                         display_text: '『 📱 』 WhatsApp',
-                        url: 'https://wa.me/393476686131'
+                        url: 'https://wa.me/393514357738'
                     })
                 },
                 {
@@ -108,37 +108,10 @@ let handler = async (m, { conn }) => {
                 footer: ``,
                 interactiveButtons: buttons
             }, { quoted: m })
-            
-            await conn.sendMessage(
-                m.chat,
-                {
-                    text: 'by samakavare', // non visualizzabile, lascia i credits
-                    interactiveButtons: [
-                        {
-                            name: 'payment_info',
-                            buttonParamsJson: JSON.stringify({
-                                payment_settings: [
-                                    {
-                                        type: 'pix_static_code',
-                                        pix_static_code: {
-                                            merchant_name: 'samakavare',
-                                            key: '+393476686131',
-                                            key_type: 'PHONE',
-                                        }
-                                    }
-                                ]
-                            })
-                        }
-                    ]
-                },
-                { quoted: m }
-            )
-            
         } catch (fallbackError) {
             console.error('Errore anche nel fallback:', fallbackError);
-            // Ultimo tentativo: solo testo
             let username = await conn.getName(m.sender)
-            await conn.reply(m.chat, `👋 Hey ${username}!\n\n👨‍💻 *Creatore: Sam aka Vare*\n\n📱 WhatsApp: wa.me/393476686131\n📧 Email: samakavare1@gmail.com\n📸 Instagram: samakavare\n💻 GitHub: realvare`, m);
+            await conn.reply(m.chat, `👋 Hey ${username}!\n\n👨‍💻 *Creatore: Sam aka Vare*\n\n📱 WhatsApp: wa.me/393514357738\n📧 Email: samakavare1@gmail.com\n📸 Instagram: samakavare\n💻 GitHub: realvare`, m);
         }
     }
 }

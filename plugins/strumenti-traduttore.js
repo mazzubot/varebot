@@ -24,7 +24,7 @@ const languages = {
 };
 
 const max = 5000;
-const maxtts = 200; // Ridotto per evitare problemi con TTS
+const maxtts = 200;
 
 const splitText = (text, maxLength) => {
     if (text.length <= maxLength) return [text];
@@ -46,22 +46,15 @@ const splitText = (text, maxLength) => {
     return chunks;
 };
 
-// Funzione migliorata per generare audio TTS
 const generateTTS = async (text, lang, conn, m) => {
     try {
-        // Pulisce il testo da caratteri speciali
-        const cleanText = text.replace(/[^\w\s.,!?àèìòùáéíóúäëïöüñç]/gi, '').trim();
-        
-        if (!cleanText) {
+    const cleanText = text.replace(/[^\w\s.,!?àèìòùáéíóúäëïöüñç]/gi, '').trim();
+    
+    if (!cleanText) {
             throw new Error('Testo vuoto dopo la pulizia');
         }
-
-        // Limita la lunghezza del testo per TTS
         const audioText = cleanText.length > maxtts ? cleanText.substring(0, maxtts) : cleanText;
-        
-        // Prova diverse API TTS in ordine di preferenza
         const ttsApis = [
-            // API Google TTS con headers migliorati
             {
                 name: 'Google TTS',
                 url: `https://translate.google.com/translate_tts?ie=UTF-8&client=tw-ob&q=${encodeURIComponent(audioText)}&tl=${lang}&total=1&idx=0&textlen=${audioText.length}`,
@@ -71,7 +64,6 @@ const generateTTS = async (text, lang, conn, m) => {
                     'Accept': 'audio/mpeg, */*'
                 }
             },
-            // API alternativa
             {
                 name: 'Alternative TTS',
                 url: `https://api.voicerss.org/?key=demo&hl=${lang}&src=${encodeURIComponent(audioText)}&f=44khz_16bit_stereo`,
@@ -79,13 +71,21 @@ const generateTTS = async (text, lang, conn, m) => {
             }
         ];
 
+        const looksLikeAudio = (buf, contentType) => {
+            if (!buf || buf.length < 4) return false;
+            if ((contentType || '').includes('audio')) return true;
+            if (buf[0] === 0x49 && buf[1] === 0x44 && buf[2] === 0x33) return true;
+            if (buf[0] === 0x4f && buf[1] === 0x67 && buf[2] === 0x67 && buf[3] === 0x53) return true;
+            if (buf[0] === 0x52 && buf[1] === 0x49 && buf[2] === 0x46 && buf[3] === 0x46) return true;
+            if (buf[0] === 0xff && (buf[1] & 0xe0) === 0xe0) return true;
+            return false;
+        };
+
         let audioBuffer = null;
         let usedApi = null;
 
         for (const api of ttsApis) {
             try {
-                console.log(`Tentando con ${api.name}...`);
-                
                 const response = await fetch(api.url, {
                     method: 'GET',
                     headers: {
@@ -96,15 +96,13 @@ const generateTTS = async (text, lang, conn, m) => {
                 });
 
                 if (response.ok) {
-                    audioBuffer = await response.arrayBuffer();
+                    const contentType = (response.headers.get('content-type') || '').toLowerCase();
+                    const buf = Buffer.from(await response.arrayBuffer());
                     
-                    // Verifica che il buffer non sia vuoto
-                    if (audioBuffer && audioBuffer.length > 100) {
+                    if (buf && buf.length > 100 && looksLikeAudio(buf, contentType)) {
                         usedApi = api.name;
-                        console.log(`Successo con ${api.name}, dimensione: ${audioBuffer.length} bytes`);
+                        audioBuffer = buf;
                         break;
-                    } else {
-                        console.log(`${api.name} ha restituito un buffer troppo piccolo`);
                     }
                 }
             } catch (apiError) {
@@ -117,7 +115,6 @@ const generateTTS = async (text, lang, conn, m) => {
             throw new Error('Tutte le API TTS hanno fallito o restituito audio vuoto');
         }
 
-        // Invia l'audio
         await conn.sendMessage(m.chat, {
             audio: audioBuffer,
             mimetype: 'audio/mpeg',
@@ -191,9 +188,6 @@ ${Object.entries(languages).map(([code, name]) => `*├─⭓* *${code}: ${name}
     if (text.length > max) {
         return m.reply(`『 ❌ 』- \`Testo troppo lungo! Massimo ${max} caratteri.\`\n\`Il tuo testo ha ${text.length} caratteri.\``);
     }
-
-    await m.react('⌛');
-
     try {
         const textChunks = splitText(text, 1000);
         let fullTranslation = '';
@@ -217,16 +211,12 @@ ${Object.entries(languages).map(([code, name]) => `*├─⭓* *${code}: ${name}
                 }
             }
         }
-
-        await m.react('✅');
-
         if (audioOnly) {
             const success = await generateTTS(fullTranslation, targetLang, conn, m);
             if (!success) {
                 await m.reply(`Traduzione: ${fullTranslation}`);
             }
         } else {
-            // Prepara i testi per i pulsanti audio (più corti)
             const shortOriginal = text.substring(0, 50);
             const shortTranslation = fullTranslation.substring(0, 50);
             

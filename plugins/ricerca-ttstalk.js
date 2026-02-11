@@ -94,9 +94,6 @@ ${d.f}
         } else {
             await m.reply(teks + `\n${d.l} ⚠️ Foto profilo non disponibile`)
         }
-
-        await m.react('✨')
-
     } catch (err) {
         console.error(err)
         await m.reply(`${d.varebot}

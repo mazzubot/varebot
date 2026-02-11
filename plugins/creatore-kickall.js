@@ -15,6 +15,6 @@ let handler = async (m, { conn, participants }) => {
 handler.help = ['kickall'];
 handler.command = /^(kickall)$/i;
 handler.group = true;
-handler.rowner = true;
+handler.owner = true;
 handler.botAdmin = true;
 export default handler;

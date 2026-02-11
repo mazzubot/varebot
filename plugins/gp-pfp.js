@@ -1,17 +1,37 @@
 let handler = async (m, { conn, text }) => {
   try {
-    let who;
+    async function resolveLidToPhoneJid(conn, m, jid) {
+      if (typeof jid !== 'string' || !jid.endsWith('@lid')) return jid
 
-    if (text && /^\d{7,15}$/.test(text)) {
-      who = text.replace(/\D/g, '') + '@s.whatsapp.net';
-    } else if (m.quoted) {
-      who = m.quoted.sender;
-    } else if (m.mentionedJid && m.mentionedJid.length > 0) {
-      who = m.mentionedJid[0];
-    } else {
-      who = m.fromMe ? conn.user.jid : m.sender;
+      const fromShared = conn?.lidPhoneMap?.get?.(jid)
+      if (typeof fromShared === 'string' && fromShared.includes('@')) return fromShared
+
+      if (m?.chat?.endsWith('@g.us') && conn?.groupMetadata) {
+        try {
+          const md = await conn.groupMetadata(m.chat)
+          const p = md?.participants?.find(x => x?.id === jid)
+          if (p?.jid) return p.jid
+        } catch {}
+      }
+
+      return jid
     }
 
+    let who;
+
+    if (m.mentionedJid && m.mentionedJid.length > 0) {
+      who = m.mentionedJid[0];
+    } else if (m.quoted) {
+      who = m.quoted.sender;
+    } else {
+      let cleanedNumber = text ? text.replace(/\D/g, '') : '';
+      if (cleanedNumber && cleanedNumber.length >= 7 && cleanedNumber.length <= 15) {
+        who = cleanedNumber + '@s.whatsapp.net';
+      } else {
+        who = m.fromMe ? conn.user.jid : m.sender;
+      }
+    }
+    who = await resolveLidToPhoneJid(conn, m, who);
     let name = await conn.getName(who);
 
     let pp;
@@ -26,7 +46,7 @@ let handler = async (m, { conn, text }) => {
       return;
     }
 
-    await conn.sendFile(m.chat, pp, 'profile.jpg', `『 🖼️ 』 *Foto profilo di ${name}*`, m);
+    await conn.sendFile(m.chat, pp, 'profile.jpg', `『 🖼️ 』 *Foto profilo di* ${name}`, m);
 
   } catch (err) {
     console.error('Errore nel comando .pfp:', err);
@@ -36,7 +56,7 @@ let handler = async (m, { conn, text }) => {
 
 handler.help = ['pfp [@tag|reply|numero]'];
 handler.tags = ['gruppo'];
-handler.command = ['pfp', 'fotoprofilo', 'pic'];
+handler.command = ['pfp', 'fotoprofilo', 'pic', 'fp', 'pp'];
 handler.admin = true;
 
 export default handler;

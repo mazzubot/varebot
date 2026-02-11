@@ -2,6 +2,7 @@
 * by sam aka vare
 * github.com/realvare
 * non togliere i crediti
+* kinda obsoleto
 */
 
 let handler = async (m, { conn, text, usedPrefix, command }) => {
@@ -19,8 +20,6 @@ let handler = async (m, { conn, text, usedPrefix, command }) => {
     const DELAY = 100;
 
     let msg = await m.reply('🔍 *Ricerca in corso...*');
-    let lastUpdate = Date.now();
-    let currentMsg = '';
     let results = [];
     let notFound = [];
     let found = 0;
@@ -54,17 +53,6 @@ let handler = async (m, { conn, text, usedPrefix, command }) => {
                 } else { /*by sam aka vare*/
                     notFound.push(batch[idx]);
                 }
-            }
-
-            if (Date.now() - lastUpdate > UPDATE_INTERVAL) {
-                currentMsg = `🔍 *Ricerca WhatsApp*\n┌───────────\n✨ *Processati:* ${Math.min(i + BATCH_SIZE, total)}/${total}\n✅ *Trovati:* ${found}\n❌ *Non trovati:* ${notFound.length}\n└───────────`;
-                
-                await conn.sendMessage(m.chat, {
-                    text: currentMsg,
-                    edit: msg.key
-                }).catch(() => {});
-                
-                lastUpdate = Date.now();
             }
 
             await new Promise(resolve => setTimeout(resolve, DELAY));

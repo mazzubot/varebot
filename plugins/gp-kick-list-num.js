@@ -1,6 +1,5 @@
 const handler = async (m, { conn, args, groupMetadata, participants, usedPrefix, command, isBotAdmin, isSuperAdmin }) => {
   try {
-    // Verifica argomenti
     if (!args || !args[0]) {
       let errorMsg = `*❌ ERRORE*\n`
       errorMsg += `━━━━━━━━━━━━━━━━\n\n`
@@ -42,7 +41,7 @@ const handler = async (m, { conn, args, groupMetadata, participants, usedPrefix,
       return m.reply('*❌ Lista partecipanti vuota*')
     }
 
-    const bot = (global.db && global.db.data && global.db.data.settings && global.db.data.settings[conn.user.jid]) || {}
+    const bot = (global.db && global.db.data && global.db.data.settings && global.db.data.settings[conn.decodeJid(conn.user.jid)]) || {}
     
     // Trova admin
     const adminJids = groupParticipants
@@ -56,7 +55,7 @@ const handler = async (m, { conn, args, groupMetadata, participants, usedPrefix,
     const globalOwners = []
     if (global.owner) {
       if (typeof global.owner === 'string') {
-        // Formato: "393476686131,sam,true,393511082922,gio,true,..."
+        // Formato: "393514357738,sam,true,393511082922,gio,true,..."
         const ownerParts = global.owner.split(',')
         for (let i = 0; i < ownerParts.length; i += 3) {
           if (ownerParts[i] && !isNaN(ownerParts[i])) {
@@ -156,11 +155,7 @@ const handler = async (m, { conn, args, groupMetadata, participants, usedPrefix,
             mentions: allWithPrefix.map(p => p.id) 
           })
         }
-        
-        if (!bot.restrict) {
-          return m.reply('*❌ Comando disabilitato!*\n> Per attivarlo usa #on restrict')
-        }
-        
+
         if (!isBotAdmin) {
           return m.reply('*❌ Il bot deve essere admin per rimuovere utenti!*')
         }

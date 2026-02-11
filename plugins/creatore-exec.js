@@ -1,3 +1,4 @@
+// decommenta se lo vuoi usare
 /*import syntaxerror from 'syntax-error'
 import { format } from 'util'
 import { fileURLToPath } from 'url'
@@ -62,7 +63,7 @@ handler.help = ['> codice', '=> codice']
 handler.tags = ['creatore']
 handler.customPrefix = /^=?>\s?/
 handler.command = /(?:)/i
-handler.rowner = true
+handler.owner = true
 export default handler
 
 class CustomArray extends Array {

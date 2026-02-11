@@ -42,7 +42,7 @@ let handler = async (m, { conn, args, isOwner }) => {
 handler.help = ['unbangp']
 handler.tags = ['creatore']
 handler.command = /^unbangp$/i
-handler.rowner = true
+handler.owner = true
 handler.group = true
 
 export default handler

@@ -1,3 +1,4 @@
+import { Blob } from 'node:buffer';
 import { FormData } from 'formdata-node';
 import fetch from 'node-fetch';
 
@@ -23,7 +24,7 @@ let handler = async (m, { conn, usedPrefix, command }) => {
         }
 
         let form = new FormData();
-        form.append('image_file', img, {
+        form.append('image_file', new Blob([img]), {
             filename: 'image.png',
             contentType: mime
         });

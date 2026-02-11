@@ -66,6 +66,6 @@
       {"question": "Cresce al contrario. Cos’è?", "response": "La stalattite"},
       {"question": "Non è acqua ma scorre. Cos’è?", "response": "Il tempo"},
       {"question": "Va in giro sempre nuda ma nessuno la guarda. Cos’è?", "response": "La verità"},
-  {"question": "Si siede ma non ha gambe. Cos’è?", "response": "La polvere"},
-  {"question": "Non ha peso, ma può affondare una nave. Cos’è?", "response": "La paura"}
+      {"question": "Si siede ma non ha gambe. Cos’è?", "response": "La polvere"},
+      {"question": "Non ha peso, ma può affondare una nave. Cos’è?", "response": "La paura"}
 ]

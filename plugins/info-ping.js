@@ -1,7 +1,7 @@
 import speed from 'performance-now'
 
 let handler = async (m, { conn }) => {
-  let start = speed() // Start timing
+  let start = speed()
   await conn.readMessages([m.key])
 
   let end = speed()

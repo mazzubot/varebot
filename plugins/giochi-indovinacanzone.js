@@ -1,240 +1,259 @@
-//comando creatore da sam github.com/realvare
 import axios from 'axios'
 import fs from 'fs'
 import path from 'path'
+
+const aymetanonlihosceltiio = [
+    "Lazza", "Sfera Ebbasta", "Ghali", "Baby Gang", "Shiva", "Drake", "Tony Boy", 
+    "Kid Yugi", "21 savage", "Marracash", "Capo Plaza", "Guè Pequeno", "King Von", 
+    "Central Cee", "Lil Durk", "Tha Supreme", "Gemitaiz", "Fabri Fibra", "Simba La Rue", 
+    "Il tre", "RondoDaSosa", "Drefgold", "Noyz Narcos", "Salmo", "Ariete", "Tedua", 
+    "Anna", "Rose Villain", "Artie 5ive", "Glocky", "Lil Baby", "Kodack Black", "LUCKI", 
+    "YoungBoy Never Broke Again", "Il Ghost", "Melons", "Massimo Pericolo", 
+    "Nabi", "Geolier", "Paky", "Villabanks", "Blanco", "Mahmood", "Irama"
+]
+
 function normalize(str) {
     if (!str) return '';
-    str = str.split(/\s*[\(\[{](?:feat|ft|featuring).*$/i)[0]
-        .split(/\s*(?:feat|ft|featuring)\.?\s+.*$/i)[0]
-    
     return str
+        .split('-')[0] 
+        .split(/[\(\[{]/)[0] 
         .toLowerCase()
         .normalize('NFD')
-        .replace(/[\u0300-\u036f]/g, '')
-        .replace(/[^a-z0-9\s]/g, '')
+        .replace(/[\u0300-\u036f]/g, '') 
+        .replace(/[^a-z0-9\s]/g, '') 
         .trim();
 }
-async function getRandomItalianTrackFromItunes() {
-    const keywords = [
-       "Lazza", "Melons", "Sayf", "Sfera Ebbasta", "Ghali","Baby Gang", "Shiva", "Drake", "Tony Boy", "Kid Yugi", "21 savage", "Marracash", "Capo Plaza", "Guè Pequeno", "Melons", "King Von", "Chief Keef", "Lil Durk",  "Tha Supreme", "Gemitaiz", "Fabri Fibra", "Marracash", "Simba La Rue", "Il tre", "Rondo Da Sosa", "Drefgold", "Noyz Narcos", "Salmo", "Clementino", "Noyz Narcos", "Rocco Hunt", "Luchè", "Enzo Dong", "Calcutta", "Gazzelle", "Ariete"
-    ]
-    let found = null
-    let tentativi = 0
-    while (!found && tentativi < 5) {
-        const randomKeyword = keywords[Math.floor(Math.random() * keywords.length)]
-        const response = await axios.get('https://itunes.apple.com/search', {
-            params: {
-                term: randomKeyword,
-                country: 'IT',
-                media: 'music',
-                limit: 35
+
+function similarity(str1, str2) {
+    const s1 = normalize(str1);
+    const s2 = normalize(str2);
+    if (!s1 || !s2) return 0;
+    const words1 = s1.split(/\s+/);
+    const words2 = s2.split(/\s+/);
+    const intersection = words1.filter(w => words2.includes(w));
+    return (2.0 * intersection.length) / (words1.length + words2.length);
+}
+
+async function getRandomTrack(artist = null) {
+    let found = null;
+    let tentativi = 0;
+    const searchTerms = artist ? [artist] : aymetanonlihosceltiio;
+    
+    while (!found && tentativi < 3) {
+        const query = artist || searchTerms[Math.floor(Math.random() * searchTerms.length)];
+        
+        try {
+            const response = await axios.get('https://itunes.apple.com/search', {
+                params: {
+                    term: query,
+                    country: 'IT',
+                    media: 'music',
+                    entity: 'song',
+                    attribute: 'artistTerm',
+                    limit: 100
+                }
+            });
+            const valid = response.data.results.filter(b => {
+                const title = b.trackName.toLowerCase();
+                const artistName = b.artistName.toLowerCase();
+                
+                return b.previewUrl && 
+                b.trackName && 
+                b.artistName && 
+                b.artworkUrl100 &&
+                b.trackTimeMillis > 45000 &&
+                !title.includes('karaoke') &&
+                !title.includes('tribute') &&
+                !title.includes('cover') &&
+                !title.includes('instrumental') &&
+                !title.includes('strumentale') &&
+                !title.includes('remix') &&
+                !title.includes('live') &&
+                !title.includes('concert') &&
+                !title.includes('demo') &&
+                !artistName.includes('karaoke') &&
+                !artistName.includes('cover band');
+            });
+            let filteredValid = valid;
+            if (artist) {
+                const searchNorm = normalize(artist);
+                filteredValid = valid.filter(b => normalize(b.artistName).includes(searchNorm));
             }
-        })
-        const valid = response.data.results.filter(b => b.previewUrl && b.trackName && b.artistName && b.artworkUrl100)
-        if (valid.length) found = valid[Math.floor(Math.random() * valid.length)]
-        tentativi++
+            const topHitsCount = Math.min(filteredValid.length, 25); 
+            
+            if (topHitsCount > 0) {
+                const topHits = filteredValid.slice(0, topHitsCount);
+                found = topHits[Math.floor(Math.random() * topHits.length)];
+            }
+
+        } catch (e) {
+            console.error('Errore iTunes:', e.message);
+        }
+        tentativi++;
     }
-    if (!found) throw new Error(`${global.errore}`)
+
+    if (!found) {
+        if (artist) throw new Error(`Non ho trovato canzoni famose per "${artist}".`);
+        throw new Error('Errore durante la ricerca della canzone.');
+    }
+
     return {
         title: found.trackName,
         artist: found.artistName,
         preview: found.previewUrl,
-        artwork: found.artworkUrl100.replace('100x100bb', '600x600bb') // Migliore qualità
-    }
+        artwork: found.artworkUrl100.replace('100x100bb', '600x600bb')
+    };
 }
 
-async function downloadImage(url, filepath) {
-    const response = await axios.get(url, {
-        responseType: 'arraybuffer'
-    })
-    fs.writeFileSync(filepath, Buffer.from(response.data))
-    return filepath
-}
+const activeGames = new Map();
+let handler = async (m, { conn, text }) => {
+    const chat = m.chat;
 
-const activeGames = new Map()
-
-let handler = async (m, { conn }) => {
-    const chat = m.chat
-    
     if (activeGames.has(chat)) {
-        return m.reply('『 ⚠️ 』- \`C\'è già una partita in corso in questo gruppo!\` ')
+        return m.reply('『 ⚠️ 』- \`C\'è già una partita in corso!\` Finisci quella prima.');
     }
 
+    let audioPath = null;
+    
     try {
-        const track = await getRandomItalianTrackFromItunes()
-        const audioResponse = await axios.get(track.preview, {
-            responseType: 'arraybuffer'
-        })
+        const track = await getRandomTrack(text);
         
-        const tmpDir = path.join(process.cwd(), 'temp')
-        if (!fs.existsSync(tmpDir)) {
-            fs.mkdirSync(tmpDir, { recursive: true })
-        }
+        const audioResponse = await axios.get(track.preview, { responseType: 'arraybuffer' });
+        const tmpDir = path.join(process.cwd(), 'temp');
+        if (!fs.existsSync(tmpDir)) fs.mkdirSync(tmpDir, { recursive: true });
         
-        const audioPath = path.join(tmpDir, `song_${Date.now()}.mp3`)
-        
-        fs.writeFileSync(audioPath, Buffer.from(audioResponse.data))
-        
-        const formatGameMessage = (timeLeft) => `
-  ⋆｡˚『 ╭ \`INDOVINA CANZONE\` ╯ 』˚｡⋆\n╭
-┃ 『 ⏱️ 』 \`Tempo:\` *${timeLeft} secondi* 
-┃ 『 👤 』 \`Artista:\` *${track.artist}* 
+        audioPath = path.join(tmpDir, `guess_${Date.now()}.mp3`);
+        fs.writeFileSync(audioPath, Buffer.from(audioResponse.data));
+
+        const txtMessage = `
+⋆｡˚『 ╭ \`INDOVINA CANZONE\` ╯ 』˚｡⋆\n╭
+┃ 『 ⏱️ 』 \`Tempo:\` *30s*
+┃ 『 👤 』 \`Artista:\` *${track.artist}*
 ┃
 ┃ ➤  \`Scrivi il titolo!\`
-╰⭒─ׄ─ׅ─ׄ─⭒─ׄ─ׅ─ׄ─⭒─ׄ─ׅ─ׄ─⭒`
+╰⭒─ׄ─ׅ─ׄ─⭒─ׄ─ׅ─ׄ─⭒─ׄ─ׅ─ׄ─⭒`;
+
         let gameMessage = await conn.sendMessage(m.chat, {
-            text: formatGameMessage(30),
-            contextInfo: {
+            text: txtMessage,
+            contextInfo: { ...global.fake.contextInfo,
                 externalAdReply: {
-                    title: 'indovina la canzone',
+                    title: 'Indovina la canzone',
                     body: `Artista: ${track.artist}`,
                     thumbnailUrl: track.artwork,
-                    sourceUrl: 'vare ✧ bot',
+                    sourceUrl: '',
                     mediaType: 1,
                     renderLargerThumbnail: true
                 }
             }
-        }, { quoted: m })
-        
+        }, { quoted: m });
+
         await conn.sendMessage(m.chat, { 
-            audio: fs.readFileSync(audioPath),
-            mimetype: 'audio/mp4',
-            ptt: true
-        }, { quoted: m })
-        fs.unlinkSync(audioPath)
+            audio: fs.readFileSync(audioPath), 
+            mimetype: 'audio/mp4', 
+            ptt: true,
+            contextInfo: global.fake.contextInfo
+        }, { quoted: gameMessage });
+
         let game = {
             track,
             timeLeft: 30,
+            id: m.chat,
             message: gameMessage,
             interval: null
-        }
+        };
+
+        activeGames.set(chat, game);
+
         game.interval = setInterval(async () => {
-            try {
-                game.timeLeft -= 5
-            
-                if (game.timeLeft <= 0) {
-                    clearInterval(game.interval)
-                    activeGames.delete(chat)
-                    await conn.sendMessage(m.chat, {
-                        text: `
-ㅤ⋆｡˚『 ╭ \`TEMPO SCADUTO\` ╯ 』˚｡⋆\n╭\n│
-│ ➤ \`Nessuno ha indovinato!\`
-┃ 『  』🎵 \`Titolo:\` *${track.title}*
-┃ 『  』👤 \`Artista:\` *${track.artist}*
-┃
-╰⭒─ׄ─ׅ─ׄ─⭒`,
-                        buttons: [
-                            {
-                                buttonId: '.ic',
-                                buttonText: {
-                                    displayText: '『 🎵 』 Rigioca'
-                                },
-                                type: 1
-                            }
-                        ],
-                        headerType: 1
-                    }).catch(() => {})
-                    return
-                }
-                // Non fare niente durante il countdown, il messaggio rimane fisso
-            } catch (e) {
-                console.error('Errore nel countdown:', e)
+            if (!activeGames.has(chat)) {
+                return clearInterval(game.interval);
             }
-        }, 5000) //timer ogni 5 secondi per colpa di ratelimit czz
-        activeGames.set(chat, game)
+
+            game.timeLeft -= 5;
+
+            if (game.timeLeft <= 0) {
+                clearInterval(game.interval);
+                activeGames.delete(chat);
+                
+                await conn.sendMessage(m.chat, {
+                    text: `
+ㅤ⋆｡˚『 ╭ \`TEMPO SCADUTO\` ╯ 』˚｡⋆\n╭
+│ ➤ \`Nessuno ha indovinato!\`
+┃ 『 🎵 』 \`Titolo:\` *${track.title}*
+┃ 『 👤 』 \`Artista:\` *${track.artist}*
+╰⭒─ׄ─ׅ─ׄ─⭒`,
+                    buttons: [
+                        { buttonId: '.ic', buttonText: { displayText: '『 🎵 』 Rigioca' }, type: 1 }
+                    ],
+                    headerType: 1,
+                    viewOnce: true,
+                    contextInfo: global.fake.contextInfo
+                }, { quoted: gameMessage }).catch(() => {});
+            }
+        }, 5000);
 
     } catch (e) {
-        console.error('Errore in indovina canzone:', e)
-        m.reply(`${global.errore}`)
-        activeGames.delete(chat)
+        console.error('Errore IC:', e);
+        m.reply(e.message || 'Errore, riprova.');
+        activeGames.delete(chat);
+    } finally {
+        if (audioPath && fs.existsSync(audioPath)) {
+            try { fs.unlinkSync(audioPath); } catch (err) {}
+        }
     }
 }
-handler.before = async (m, { conn }) => {
-    const chat = m.chat
-    
-    if (!activeGames.has(chat)) return
-    
-    const game = activeGames.get(chat)
-    const userAnswer = normalize(m.text || '')
-    const correctAnswer = normalize(game.track.title)
-    if (!userAnswer || userAnswer.length < 2) return;
-    function similarity(str1, str2) {
-        const words1 = str1.split(' ').filter(Boolean)
-        const words2 = str2.split(' ').filter(Boolean)
-        
-        const matches = words1.filter(word => 
-            words2.some(w2 => w2.includes(word) || word.includes(w2))
-        )
-        return matches.length / Math.max(words1.length, words2.length)
-    }
 
-    const similarityScore = similarity(userAnswer, correctAnswer)
+handler.before = async (m, { conn }) => {
+    const chat = m.chat;
+    if (!activeGames.has(chat)) return;
+    const game = activeGames.get(chat);
+    if (!m.text || m.text.length < 2 || m.text.startsWith('.')) return;
+    const userAnswer = normalize(m.text);
+    const correctAnswer = normalize(game.track.title);
+    const score = similarity(m.text, game.track.title);
     const isCorrect = 
-        (userAnswer.length > 1) &&
-        (
-            userAnswer === correctAnswer ||
-            (correctAnswer.includes(userAnswer) && userAnswer.length > correctAnswer.length * 0.5) ||
-            (userAnswer.includes(correctAnswer) && userAnswer.length < correctAnswer.length * 1.5) ||
-            similarityScore >= 0.7
-        );
+        userAnswer === correctAnswer || 
+        (correctAnswer.length > 3 && userAnswer.includes(correctAnswer)) ||
+        (userAnswer.length > 3 && correctAnswer.includes(userAnswer)) ||
+        score >= 0.75;
 
     if (isCorrect) {
-        clearInterval(game.interval)
-        activeGames.delete(chat)
-        let reward = Math.floor(Math.random() * 100) + 50
-        let exp = 500
-        if (!global.db.data.users[m.sender]) global.db.data.users[m.sender] = {}
-        global.db.data.users[m.sender].euro = (global.db.data.users[m.sender].euro || 0) + reward
-        global.db.data.users[m.sender].exp = (global.db.data.users[m.sender].exp || 0) + exp
-        await conn.sendMessage(m.chat, {
-            react: {
-                text: '✅',
-                key: m.key
-            }
-        }).catch(() => {})
+        clearInterval(game.interval);
+        activeGames.delete(chat);
+        let reward = Math.floor(Math.random() * 200) + 100;
+        let exp = Math.floor(Math.random() * 300) + 200;
+        if (!global.db.data.users[m.sender]) global.db.data.users[m.sender] = {};
+        global.db.data.users[m.sender].euro = (global.db.data.users[m.sender].euro || 0) + reward;
+        global.db.data.users[m.sender].exp = (global.db.data.users[m.sender].exp || 0) + exp;
+
+        await conn.sendMessage(m.chat, { react: { text: '✅', key: m.key } });
+        
         await conn.sendMessage(m.chat, {
             text: `
-ㅤㅤ⋆｡˚『 ╭ \`CORRETTA\` ╯ 』˚｡⋆\n╭\n│
-│ ➤ \`Risposta Corretta!\`
-┃ 『  』🎵 \`Titolo:\` *${game.track.title}*
-┃ 『  』👤 \`Artista:\` *${game.track.artist}*
-┃
-┃ 『 🎁 』 \`Vincite:\`
-│ ➤  \`${reward}\` *euro*
-│ ➤  \`${exp}\` *exp*
-┃
+ㅤㅤ⋆｡˚『 ╭ \`VITTORIA\` ╯ 』˚｡⋆\n╭
+│ ➤ \`Grande @${m.sender.split('@')[0]}!\`
+┃ 『 🎵 』 \`Titolo:\` *${game.track.title}*
+┃ 『 👤 』 \`Artista:\` *${game.track.artist}*
+┃ 『 🎁 』 \`+${reward}€ | +${exp}xp\`
 ╰⭒─ׄ─ׅ─ׄ─⭒`,
+            mentions: [m.sender],
+            contextInfo: global.fake.contextInfo,
             buttons: [
-                {
-                    buttonId: '.ic',
-                    buttonText: {
-                        displayText: '『 🎵 』 Rigioca'
-                    },
-                    type: 1
-                }
+                { buttonId: '.ic', buttonText: { displayText: '『 🎵 』 Rigioca' }, type: 1 }
             ],
-            headerType: 1
-        }, { quoted: m }).catch(() => {})
-        
-        console.log('Debug risposta:', {
-            userAnswer,
-            correctAnswer,
-            similarity: similarity(userAnswer, correctAnswer)
-        })
-    } else if (similarityScore >= 0.3) {
-        await conn.sendMessage(m.chat, {
-            react: {
-                text: '❌', //solo per nomi simili
-                key: m.key
-            }
-        }).catch(() => {})
-        await conn.reply(m.chat, '👀 *Ci sei quasi!* Riprova...', m)
+            headerType: 1,
+            viewOnce: true
+        }, { quoted: m });
+
+    } else if (score >= 0.45) {
+        await conn.sendMessage(m.chat, { react: { text: '👀', key: m.key } });
     }
 }
 
-handler.help = ['indovinacanzone']
-handler.tags = ['giochi']
-handler.command = ['indovinacanzone', 'ic']
-handler.register = true
-handler.group = true
-export default handler
+handler.help = ['indovinacanzone [artista]'];
+handler.tags = ['giochi'];
+handler.command = /^(indovinacanzone|ic)$/i;
+handler.group = true;
+handler.register = true;
+
+export default handler;

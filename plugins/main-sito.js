@@ -9,7 +9,7 @@ const handler = async (m, { conn }) => {
       footer: ``,
       cards: [
         {
-          image: { url: 'https://i.ibb.co/hJW7WwxV/varebot.jpg' },
+          image: { url: 'media/menu/varebot.jpeg' },
           title: `\`by sam aka vare\``,
           body: `〖 💫 〗 *Esplora tutte le funzionalità*\n〖 🚀 〗 *Bot sempre aggiornato*`,
           footer: '˗ˏˋ ☾ 𝚟𝚊𝚛𝚎𝚋𝚘𝚝 ☽ ˎˊ˗',
@@ -18,7 +18,7 @@ const handler = async (m, { conn }) => {
               name: 'cta_url',
               buttonParamsJson: JSON.stringify({
                 display_text: 'Sito - VareBot',
-                url: 'https://varebot.netlify.app'
+                url: 'https://varebot.com'
               })
             },
             {
@@ -32,7 +32,7 @@ const handler = async (m, { conn }) => {
               name: 'cta_url',
               buttonParamsJson: JSON.stringify({
                 display_text: '💬 WhatsApp',
-                url: 'https://wa.me/393476686131'
+                url: 'https://wa.me/393514357738'
               })
             },
             {

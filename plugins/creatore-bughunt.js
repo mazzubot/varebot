@@ -1,171 +1,260 @@
 import fs from 'fs'
 import path from 'path'
 
-let handler = async (m, { conn, text }) => {
-    let isOwner = false
-    try {
-        const sender = m.sender.split('@')[0]
-        isOwner = global.owner
-            .map(entry => Array.isArray(entry) ? entry[0] : entry)
-            .map(v => v.toString())
-            .includes(sender)
-    } catch (e) {
-        console.error('Errore nel controllo allowner:', e)
+/*⭑⭒━━━✦❘༻☾⋆⁺₊✧ BUGHUNT ✧₊⁺⋆☽༺❘✦━━━⭒⭑*/
+
+const RUNTIME_GLOBALS = new Set([
+    'fkontak', 'rcanal', 'fake', 'estilo', 'foto', 'nome', 'readMore',
+    'canaleRD', 'authsticker', 'packsticker', 'nomepack', 'nomebot',
+    'wm', 'autore', 'dev', 'testobot', 'versione', 'errore',
+    'sam', 'owner', 'mods', 'prems', 'APIKeys', 'prefix', 'db',
+    'DATABASE', 'opts', 'conns', 'conn', 'store', 'timestamp',
+    'repobot', 'gruppo', 'canale', 'insta', 'multiplier',
+    'defaultPrefix', 'authFile', 'authFileJB', 'creds',
+    'IdCanale', 'NomeCanale', 'loadDatabase', 'reloadHandler',
+    'plugins', 'groupCache', 'jidCache', 'nameCache',
+    'processedCalls', 'activeEvents', 'activeGiveaways',
+    'ignoredUsersGlobal', 'ignoredUsersGroup', 'groupSpam',
+    'dfail', 'API', 'APIs'
+])
+
+const SUSPECT_REFS = [
+    { pattern: /\btempdir\s*\(/, name: 'tempdir()', fix: "import { tmpdir } from 'os'" },
+]
+
+function hasValidExport(src) {
+    return /export\s+default\b/.test(src) ||
+           /export\s+(async\s+)?function\s+(before|handler|all|onCall)\b/.test(src) ||
+           /export\s*\{[^}]*(before|handler|all)\b[^}]*\}/.test(src)
+}
+
+function getPluginType(src) {
+    const hasCommand = /\.command\s*=/.test(src)
+    const hasBefore = /export\s+(async\s+)?function\s+before\b/.test(src) ||
+                      /\.before\s*=\s*(async\s+)?function/.test(src) ||
+                      /export\s*\{[^}]*before[^}]*\}/.test(src)
+    const hasAll = /\.all\s*=\s*(async\s+)?function/.test(src) ||
+                   /export\s+(async\s+)?function\s+all\b/.test(src)
+    const hasOnCall = /\.onCall\s*=\s*(async\s+)?function/.test(src)
+
+    if (hasCommand && !hasBefore && !hasAll) return 'command'
+    if (hasBefore || hasAll) return 'hook'
+    if (hasOnCall) return 'oncall'
+    if (hasCommand) return 'command'
+    return 'unknown'
+}
+
+function stripStringsAndComments(src) {
+    return src
+        .replace(/\/\/.*$/gm, '')
+        .replace(/\/\*[\s\S]*?\*\//g, '')
+        .replace(/`[\s\S]*?`/g, '""')
+        .replace(/'(?:[^'\\]|\\.)*'/g, '""')
+        .replace(/"(?:[^"\\]|\\.)*"/g, '""')
+        .replace(/\/(?:[^/\\]|\\.)+\/[gimsuy]*/g, '""')
+}
+
+function checkPlugin(file, content) {
+    const issues = []
+    const type = getPluginType(content)
+    const stripped = stripStringsAndComments(content)
+
+    if (!hasValidExport(content)) {
+        issues.push({ sev: 'crit', msg: 'Nessun export valido trovato' })
     }
 
-    if (!isOwner) {
-        await m.reply('*⚠️ Solo gli owner possono usare questo comando*')
-        return
+    const loaded = global.plugins?.[file]
+    if (!loaded) {
+        issues.push({ sev: 'crit', msg: 'Non caricato in memoria (errore import/sintassi)' })
+    } else {
+        if (type === 'command') {
+            if (typeof loaded !== 'function') {
+                issues.push({ sev: 'crit', msg: 'Comando non eseguibile (export default non è una funzione)' })
+            }
+            if (!loaded.command) {
+                issues.push({ sev: 'crit', msg: 'handler.command non definito' })
+            }
+        }
+        if (type === 'hook') {
+            if (typeof loaded.before !== 'function' && typeof loaded.all !== 'function') {
+                issues.push({ sev: 'crit', msg: 'Hook senza before/all valido' })
+            }
+        }
+        if (type === 'oncall') {
+            if (typeof loaded.onCall !== 'function') {
+                issues.push({ sev: 'crit', msg: 'Plugin onCall senza funzione onCall valida' })
+            }
+        }
     }
+
+    if (type === 'command' && loaded) {
+        if (!loaded.help && !loaded.menu) {
+            issues.push({ sev: 'warn', msg: 'Manca handler.help (non apparirà nel menu)' })
+        }
+        if (!loaded.tags) {
+            issues.push({ sev: 'warn', msg: 'Manca handler.tags (non categorizzato)' })
+        }
+    }
+
+    for (const { pattern, name, fix } of SUSPECT_REFS) {
+        if (pattern.test(stripped)) {
+            const importCheck = new RegExp(`import\\s+.*\\b${name.replace(/[()]/g, '')}\\b`)
+            const declCheck = new RegExp(`(const|let|var)\\s+${name.replace(/[()]/g, '')}\\b`)
+            if (!importCheck.test(content) && !declCheck.test(content)) {
+                issues.push({ sev: 'crit', msg: `\`${name}\` usato ma mai importato → ${fix}` })
+            }
+        }
+    }
+
+    const openB = (stripped.match(/\{/g) || []).length
+    const closeB = (stripped.match(/\}/g) || []).length
+    if (openB !== closeB) {
+        issues.push({ sev: 'crit', msg: `Graffe sbilanciate: { ×${openB} vs } ×${closeB}` })
+    }
+
+    const openP = (stripped.match(/\(/g) || []).length
+    const closeP = (stripped.match(/\)/g) || []).length
+    if (openP !== closeP) {
+        issues.push({ sev: 'crit', msg: `Tonde sbilanciate: ( ×${openP} vs ) ×${closeP}` })
+    }
+
+    if (content.length === 0) {
+        issues.push({ sev: 'crit', msg: 'File vuoto' })
+    }
+
+    if (type === 'command' && loaded && typeof loaded === 'function') {
+        const flags = ['sam', 'owner', 'mods', 'premium', 'group', 'admin', 'botAdmin', 'private', 'register']
+        const activeFlags = flags.filter(f => loaded[f])
+        if (activeFlags.length > 0) {
+            const conflictPrivateGroup = loaded.private && loaded.group
+            if (conflictPrivateGroup) {
+                issues.push({ sev: 'warn', msg: 'Flag conflitto: private + group attivi insieme' })
+            }
+        }
+    }
+
+    return issues
+}
+
+let handler = async (m, { conn, text }) => {
     const pluginsFolder = path.join(process.cwd(), 'plugins')
-    let diagnosticReport = ''
-    
+
     try {
         if (!fs.existsSync(pluginsFolder)) {
             throw new Error(`Cartella plugins non trovata: ${pluginsFolder}`)
         }
-        const files = await fs.promises.readdir(pluginsFolder)
-        console.log(`Trovati ${files.length} file nella cartella plugins`)
-        let errors = []
-        for (const file of files) {
-            if (file.endsWith('.js')) {
-                try {
-                    const filePath = path.join(pluginsFolder, file)
-                    console.log(`Analisi file: ${file}`)
-                    const stats = await fs.promises.stat(filePath)
-                    if (!stats.isFile()) {
-                        console.log(`Saltato ${file}: non è un file`)
-                        continue
-                    }
 
-                    const content = await fs.promises.readFile(filePath, 'utf8')
-                    const checks = [
-                        {
-                            test: !content.includes('export default'),
-                            error: `File non esporta handler correttamente`
-                        },
-                        {
-                            test: content.includes('undefined') && !content.includes('typeof undefined'),
-                            error: `Possibili riferimenti undefined non gestiti`
-                        },
-                        {
-                            test: !content.includes('try') && content.includes('await'),
-                            error: `Operazioni asincrone senza try/catch`
-                        },
-                        {
-                            test: content.includes('conn.reply') && !content.includes('catch'),
-                            error: `Chiamate conn.reply non gestite con try/catch`
-                        },
-                        {
-                            test: content.includes('m.reply') && !content.includes('catch'),
-                            error: `Chiamate m.reply non gestite con try/catch`
-                        }
-                    ]
-                    
-                    const fileErrors = checks
-                        .filter(check => check.test)
-                        .map(check => check.error)
-                    
-                    if (fileErrors.length > 0) {
-                        console.log(`Trovati ${fileErrors.length} errori in ${file}`)
-                        errors.push({
-                            file,
-                            errors: fileErrors
-                        })
-                    }
-                    
-                } catch (e) {
-                    console.error(`Errore nell'analisi di ${file}:`, e)
-                    errors.push({
-                        file,
-                        errors: [`Errore analisi: ${e.message}`]
-                    })
+        let statusMsg = await conn.sendMessage(m.chat, {
+            text: `> 『 🔍 』 \`Analisi in corso...\`\n\n> \`${global.wm || 'vare ✧ bot'}\``
+        }, { quoted: m })
+
+        const files = await fs.promises.readdir(pluginsFolder)
+        const jsFiles = files.filter(f => f.endsWith('.js'))
+        const loadedKeys = Object.keys(global.plugins || {})
+        let results = []
+        let critici = 0
+        let avvisi = 0
+        let sani = 0
+        let tipi = { command: 0, hook: 0, oncall: 0, unknown: 0 }
+
+        for (const file of jsFiles) {
+            try {
+                const filePath = path.join(pluginsFolder, file)
+                const stats = await fs.promises.stat(filePath)
+                if (!stats.isFile()) continue
+
+                const content = await fs.promises.readFile(filePath, 'utf8')
+                const type = getPluginType(content)
+                tipi[type] = (tipi[type] || 0) + 1
+                const issues = checkPlugin(file, content)
+
+                if (issues.length > 0) {
+                    const hasCrit = issues.some(i => i.sev === 'crit')
+                    if (hasCrit) critici++
+                    else avvisi++
+                    results.push({ file, issues, type })
+                } else {
+                    sani++
                 }
-            }
-        }
-        diagnosticReport = `*[ 🔍 AUTO-DIAGNOSI BOT ]*\n\n`
-        
-        if (errors.length > 0) {
-            diagnosticReport += `Trovati ${errors.length} file con potenziali problemi:\n\n`
-            errors.forEach(({ file, errors }) => {
-                diagnosticReport += `*📁 File:* ${file}\n`
-                errors.forEach(error => {
-                    diagnosticReport += `⚠️ ${error}\n`
+            } catch (e) {
+                critici++
+                results.push({
+                    file,
+                    issues: [{ sev: 'crit', msg: `Errore lettura: ${e.message}` }],
+                    type: '?'
                 })
-                diagnosticReport += '\n'
-            })
+            }
+        }
+
+        const notLoaded = jsFiles.filter(f => !loadedKeys.includes(f))
+
+        let r = `> 『 🔍 』 \`Auto-Diagnosi\`\n\n`
+
+        if (results.length === 0) {
+            r += `> 『 ✅ 』 \`Tutti i ${jsFiles.length} plugin sono in ordine.\`\n`
         } else {
-            diagnosticReport += `✅ Nessun problema rilevato nei plugin!\n`
-        }
-        diagnosticReport += `\n*📊 Statistiche:*\n`
-        diagnosticReport += `• File analizzati: ${files.length}\n`
-        diagnosticReport += `• File con errori: ${errors.length}\n`
-        if (text && text.length >= 10) {
-            diagnosticReport += `\n\n*[ 👤 SEGNALAZIONE UTENTE ]*\n`
-            diagnosticReport += `*Da:* @${m.sender.split('@')[0]}\n`
-            diagnosticReport += `*Descrizione:*\n${text}\n`
-        }
-        diagnosticReport += `\n*Data:* ${new Date().toLocaleDateString('it-IT')}`
-        diagnosticReport += `\n*Ora:* ${new Date().toLocaleTimeString('it-IT')}`
-        const finalReport = diagnosticReport
-        try {
-            const samList = Array.isArray(global.sam) ? global.sam : [global.sam]
-            for (const samEntry of samList) {
-                if (samEntry) {
-                    const samJid = String(samEntry).replace(/[^0-9]/g, '') + '@s.whatsapp.net'
-                    if (samJid !== conn.user.jid) {
-                        await conn.sendMessage(samJid, {
-                            text: finalReport,
-                            mentions: [m.sender]
-                        })
-                    } else {
-                        console.log('global.sam corrisponde all\'account del bot; messaggio non inviato.')
+            const crits = results.filter(x => x.issues.some(i => i.sev === 'crit'))
+            const warns = results.filter(x => !x.issues.some(i => i.sev === 'crit'))
+
+            if (crits.length > 0) {
+                r += `*┌─ 🔴 Critici (${crits.length})*\n`
+                for (const { file, issues } of crits) {
+                    r += `*├ 📁* \`${file}\`\n`
+                    for (const i of issues) {
+                        r += `*│*  ${i.sev === 'crit' ? '🔴' : '🟡'} ${i.msg}\n`
                     }
                 }
+                r += `*╰─────────*\n\n`
             }
-        } catch (e) {
-            console.error('Errore invio a global.sam:', e)
+
+            if (warns.length > 0) {
+                r += `*┌─ 🟡 Avvisi (${warns.length})*\n`
+                for (const { file, issues } of warns) {
+                    r += `*├ 📁* \`${file}\`\n`
+                    for (const i of issues) {
+                        r += `*│*  🟡 ${i.msg}\n`
+                    }
+                }
+                r += `*╰─────────*\n\n`
+            }
         }
-        let chatReport = `*[ 🔍 RISULTATI AUTO-DIAGNOSI ]*\n\n`
-        if (errors.length > 0) {
-            chatReport += `⚠️ *Trovati ${errors.length} file con problemi:*\n\n`
-            errors.forEach(({ file, errors }) => {
-                chatReport += `📁 *${file}*\n`
-                errors.forEach(error => chatReport += `- ${error}\n`)
-                chatReport += '\n'
-            })
-        } else {
-            chatReport += `✅ *Nessun problema rilevato!*\n`
+
+        r += `*┌─ 📊 Riepilogo*\n`
+        r += `*│* Totali: \`${jsFiles.length}\` · Sani: \`${sani}\` · Errori: \`${critici}\` · Avvisi: \`${avvisi}\`\n`
+        r += `*│* Caricati: \`${loadedKeys.length}/${jsFiles.length}\`\n`
+        r += `*│* Comandi: \`${tipi.command}\` · Hook: \`${tipi.hook}\` · OnCall: \`${tipi.oncall}\`\n`
+        if (notLoaded.length > 0 && notLoaded.length <= 10) {
+            r += `*│* Non caricati: ${notLoaded.map(f => `\`${f}\``).join(', ')}\n`
+        } else if (notLoaded.length > 10) {
+            r += `*│* Non caricati: \`${notLoaded.length}\` plugin\n`
         }
-        
-        chatReport += `\n📊 *Statistiche:*\n`
-        chatReport += `• File analizzati: ${files.length}\n`
-        chatReport += `• File con errori: ${errors.length}`
-        await m.reply(chatReport).catch(async e => {
-            console.error('Errore primo tentativo invio:', e)
-            await conn.sendMessage(m.chat, {
-                text: chatReport
-            }).catch(e => console.error('Errore secondo tentativo:', e))
+        r += `*╰─────────*\n`
+
+        if (text && text.length >= 5) {
+            r += `\n*┌─ 💬 Nota*\n`
+            r += `*│* @${m.sender.split('@')[0]}: ${text}\n`
+            r += `*╰─────────*\n`
+        }
+
+        r += `\n> \`${global.wm || 'vare ✧ bot'}\``
+
+        await conn.sendMessage(m.chat, {
+            text: r,
+            edit: statusMsg.key,
+            mentions: text ? [m.sender] : []
         })
 
     } catch (e) {
-        console.error('Errore critico:', e)
-        const errorReport = `*[ ❌ ERRORE AUTO-DIAGNOSI ]*\n\n` +
-            `*Tipo:* ${e.name}\n` +
-            `*Messaggio:* ${e.message}\n` +
-            `*Stack:* ${e.stack?.slice(0, 1000)}`
-        await m.reply(errorReport).catch(async err => {
-            console.error('Errore invio report:', err)
-            await conn.sendMessage(m.chat, {
-                text: '⚠️ *Errore critico durante l\'auto-diagnosi*\n' + e.message
-            }).catch(console.error)
-        })
+        console.error('[BUGHUNT] Errore critico:', e)
+        await conn.sendMessage(m.chat, {
+            text: `> 『 ❌ 』 \`Errore\`\n> \`${e.message}\`\n\n> \`${global.wm || 'vare ✧ bot'}\``
+        }, { quoted: m }).catch(console.error)
     }
 }
 
 handler.help = ['bughunt']
 handler.tags = ['creatore']
-handler.command = ['bughunt']
-handler.sam = true
+handler.command = ['bughunt', 'diagnosi']
+handler.owner = true
 
 export default handler

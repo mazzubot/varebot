@@ -2,12 +2,12 @@ let mutedUsers = new Map();
 let spamWarnings = new Map();
 
 function formatTimeLeft(timestamp) {
-    if (!timestamp) return '*∞ Permanente*'
+    if (!timestamp) return '∞ Permanente'
     const diff = timestamp - Date.now()
-    if (diff <= 0) return '*✅ Scaduto*'
+    if (diff <= 0) return '✅ Scaduto'
     const minutes = Math.ceil(diff / 60000)
     if (minutes === 0) return '< 1 min'
-    return `*${minutes} min*`
+    return `${minutes} min`
 }
 
 async function getUserProfilePic(conn, userId) {
@@ -15,7 +15,7 @@ async function getUserProfilePic(conn, userId) {
         const pp = await conn.profilePictureUrl(userId, 'image')
         return pp
     } catch {
-        return 'https://i.ibb.co/BKHtdBNp/default-avatar-profile-icon-1280x1280.jpg'
+        return 'https://i.ibb.co/YrWKV59/varebot-pfp.png'
     }
 }
 
@@ -23,7 +23,6 @@ function normalizeId(id) {
     if (!id) return '';
     
     let normalizedId = id.replace('@s.whatsapp.net', '').replace('@lid', '').split('@')[0]
-    
     if (normalizedId.startsWith('39')) {
         normalizedId = normalizedId.substring(2)
     }
@@ -31,9 +30,25 @@ function normalizeId(id) {
     return normalizedId
 }
 
+global.gpMutaSmuta = global.gpMutaSmuta || {}
+global.gpMutaSmuta.mutedUsers = mutedUsers
+global.gpMutaSmuta.normalizeId = normalizeId
+
 function getUserName(userId, participants) {
     const normalizedUserId = normalizeId(userId)
-    const participant = participants.find(p => normalizeId(p.id) === normalizedUserId)
+    let participant = participants.find(p => normalizeId(p.id) === normalizedUserId)
+    if (!participant) {
+        participant = participants.find(p => p.jid && normalizeId(p.jid) === normalizedUserId)
+    }
+    if (!participant) {
+        const alternativeId = normalizedUserId.startsWith('39') ?
+            normalizedUserId.substring(2) :
+            '39' + normalizedUserId
+        participant = participants.find(p => normalizeId(p.id) === alternativeId)
+        if (!participant) {
+            participant = participants.find(p => p.jid && normalizeId(p.jid) === alternativeId)
+        }
+    }
     return participant?.notify || participant?.name || normalizedUserId
 }
 
@@ -51,16 +66,20 @@ let handler = async (m, { conn, command, args, participants }) => {
         let mentions = []
         for (let [normalized, data] of mutedUsers.entries()) {
             let timeLeft = formatTimeLeft(data.timestamp)
-            text += `│ 『 🔇 』 @${data.displayNumber} - ${timeLeft}\n`
+            // Try to get current name, fallback to stored displayNumber
+            let userJid = data.displayNumber.startsWith('39') && data.displayNumber.length === 12 ?
+                data.displayNumber + '@s.whatsapp.net' :
+                data.displayNumber + '@lid'
+            let currentName = getUserName(userJid, participants) || data.displayNumber
+            text += `│ 『 🔇 』 @${currentName} - ${timeLeft}\n`
             text += `│ 『 📝 』 \`motivo:\` *${data.reason}*\n`
-            let mentionSuffix = data.displayNumber.startsWith('39') && data.displayNumber.length === 12 ? '@s.whatsapp.net' : '@lid'
-            mentions.push(data.displayNumber + mentionSuffix)
+            mentions.push(userJid)
         }
         text += `*╰⭒─ׄ─ׅ─ׄ─⭒─ׄ─ׅ─ׄ─*`
         return conn.sendMessage(m.chat, { 
             text, 
             mentions,
-            contextInfo: { ...global.fake }
+            contextInfo: { ...global.fake.contextInfo }
         })
     }
 
@@ -68,10 +87,7 @@ let handler = async (m, { conn, command, args, participants }) => {
 
     if (m.mentionedJid?.length) {
         users = m.mentionedJid
-        for (const user of m.mentionedJid) {
-            let username = '@' + user.split('@')[0]
-            args = args.filter(arg => arg !== username)
-        }
+        args = args.filter(arg => !arg.startsWith('@'))
     } else if (m.quoted) {
         users = [m.quoted.sender]
     }
@@ -81,36 +97,44 @@ let handler = async (m, { conn, command, args, participants }) => {
     }
 
     const validUsers = []
-    const userParticipantMap = new Map() // FIX: Mappa per memorizzare i participant corrispondenti
-    
+    const userParticipantMap = new Map()
     for (const user of users) {
         const decodedId = conn.decodeJid(user)
-        
         const normalizedUserId = normalizeId(decodedId)
         let isValid = false
-        let matchedParticipant = participants.find(p => normalizeId(p.id) === normalizedUserId)
-        
+        let matchedParticipant = null
+        matchedParticipant = participants.find(p => normalizeId(p.id) === normalizedUserId)
         if (matchedParticipant) {
             isValid = true
         } else {
-            const alternativeId = normalizedUserId.startsWith('39') ? 
-                normalizedUserId.substring(2) : 
-                '39' + normalizedUserId
-                
-            matchedParticipant = participants.find(p => normalizeId(p.id) === alternativeId)
+            matchedParticipant = participants.find(p => p.jid && normalizeId(p.jid) === normalizedUserId)
             if (matchedParticipant) {
                 isValid = true
+            } else {
+                const alternativeId = normalizedUserId.startsWith('39') ?
+                    normalizedUserId.substring(2) :
+                    '39' + normalizedUserId
+
+                matchedParticipant = participants.find(p => normalizeId(p.id) === alternativeId)
+                if (matchedParticipant) {
+                    isValid = true
+                } else {
+                    matchedParticipant = participants.find(p => p.jid && normalizeId(p.jid) === alternativeId)
+                    if (matchedParticipant) {
+                        isValid = true
+                    }
+                }
             }
         }
-        
+
         if (!isValid && m.quoted && decodedId === conn.decodeJid(m.quoted.sender)) {
             isValid = true
             matchedParticipant = participants.find(p => p.jid && conn.decodeJid(p.jid) === decodedId)
         }
-        
+
         if (isValid) {
             validUsers.push(decodedId)
-            userParticipantMap.set(decodedId, matchedParticipant) // FIX: Salva il participant
+            userParticipantMap.set(decodedId, matchedParticipant)
         }
     }
     users = validUsers
@@ -146,7 +170,7 @@ let handler = async (m, { conn, command, args, participants }) => {
     for (let i = 0; i < users.length; i++) {
         const user = users[i]
         const jid = conn.decodeJid(user)
-        const matched = userParticipantMap.get(user) // FIX: Recupera il participant dalla mappa
+        const matched = userParticipantMap.get(user)
         const preferredJid = matched && matched.jid ? conn.decodeJid(matched.jid) : jid
         const normalized = normalizeId(preferredJid)
         const displayNumber = preferredJid.split('@')[0]
@@ -214,7 +238,7 @@ let handler = async (m, { conn, command, args, participants }) => {
             ...global.fake.contextInfo,
             externalAdReply: {
                 ...global.fake.contextInfo,
-                title: userName,
+                title: `${userName} - ${isMute ? 'Mutato' : 'Smutato'}`,
                 body: `${targetUser.split('@')[0]} - ${isMute ? (time ? `mutato per ${time / 60000} min` : 'mutato permanentemente') : 'smutato'}`,
                 thumbnailUrl: userPp,
                 mediaType: 1,
@@ -256,7 +280,7 @@ handler.before = async (m, { conn, isCommand }) => {
             text: `ㅤㅤ⋆｡˚『 ╭ \`MUTE SCADUTO\` ╯ 』˚｡⋆\n╭\n│ 『 ✅ 』 \`utente:\` *@${m.sender.split('@')[0]}*\n│ 『 🔓 』 \`stato:\` *smutato automaticamente*\n*╰⭒─ׄ─ׅ─ׄ─⭒─ׄ─ׅ─ׄ─*`,
             mentions: [m.sender],
             contextInfo: {
-                ...global.fake,
+                ...global.fake.contextInfo,
                 externalAdReply: {
                     title: userName,
                     body: 'Mute scaduto - Utente libero',
@@ -297,7 +321,7 @@ handler.before = async (m, { conn, isCommand }) => {
             text: `ㅤㅤ⋆｡˚『 ╭ \`AVVERTIMENTO\` ╯ 』˚｡⋆\n╭\n│ 『 ⚠️ 』 \`utente:\` *@${m.sender.split('@')[0]}*\n│ 『 🚫 』 \`problema:\` *Spam mentre mutato*\n│ 『 ⚡ 』 \`rischio:\` *Rimozione dal gruppo*\n│ 『 📊 』 \`messaggi:\` *${userWarnings.count}/7*\n*╰⭒─ׄ─ׅ─ׄ─⭒─ׄ─ׅ─ׄ─*`,
             mentions: [m.sender],
             contextInfo: {
-                ...global.fake,
+                ...global.fake.contextInfo,
                 externalAdReply: {
                     title: userName,
                     body: `Avvertimento spam - ${userWarnings.count}/7 messaggi`,
@@ -321,7 +345,7 @@ handler.before = async (m, { conn, isCommand }) => {
                 text: `ㅤㅤ⋆｡˚『 ╭ \`UTENTE RIMOSSO\` ╯ 』˚｡⋆\n╭\n│ 『 🚫 』 \`utente:\` *@${m.sender.split('@')[0]}*\n│ 『 ⚡ 』 \`motivo:\` *Spam eccessivo mentre mutato*\n│ 『 📊 』 \`messaggi:\` *${userWarnings.count} in poco tempo*\n*╰⭒─ׄ─ׅ─ׄ─⭒─ׄ─ׅ─ׄ─*`,
                 mentions: [m.sender],
                 contextInfo: {
-                    ...global.fake,
+                    ...global.fake.contextInfo,
                     externalAdReply: {
                         title: userName,
                         body: 'Rimosso per spam eccessivo',
@@ -358,7 +382,7 @@ handler.before = async (m, { conn, isCommand }) => {
                 text: `ㅤㅤ⋆｡˚『 ╭ \`SEI MUTATO\` ╯ 』˚｡⋆\n╭\n│ 『 🚫 』 \`utente:\` *@${m.sender.split('@')[0]}*\n│ 『 🔇 』 \`stato:\` *Non puoi parlare o usare comandi*\n│ 『 📝 』 \`motivo:\` *${data.reason}*\n│ 『 ⏱️ 』 \`tempo:\` *${remaining}*\n*╰⭒─ׄ─ׅ─ׄ─⭒─ׄ─ׅ─ׄ─*`,
                 mentions: [m.sender],
                 contextInfo: {
-                    ...global.fake,
+                    ...global.fake.contextInfo,
                     externalAdReply: {
                         title: userName,
                         body: `Utente mutato - ${remaining}`,

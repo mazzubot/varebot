@@ -1,4 +1,4 @@
-const handler = async (m, {conn, isROwner, text}) => {
+const handler = async (m, {conn, isSam, text}) => {
   const delay = (time) => new Promise((res) => setTimeout(res, time));
   const getGroups = await conn.groupFetchAllParticipating();
   const groups = Object.entries(getGroups).slice(0).map((entry) => entry[1]);
@@ -8,7 +8,7 @@ const handler = async (m, {conn, isROwner, text}) => {
   const autore = m.sender;
   const autoreTag = `@${autore.split('@')[0]}`;
   for (const i of anu) {
-    await delay(500);
+    await delay(1000); // Comando rischioso btw usatelo con cautela
     conn.sendMessage(i, { 
       text: `⭐️ *MESSAGGIO GLOBALE*\n\n👤 *Autore:* ${autoreTag}\n${messaggio}`,
       mentions: [autore]

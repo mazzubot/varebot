@@ -5,7 +5,7 @@ import { join } from 'path';
 let handler = async (m, { conn, text, args, usedPrefix, command }) => {
   let pp = 'https://www.bighero6challenge.com/images/thumbs/Piedra,-papel-o-tijera-0003318_1584.jpeg';
   let wm = 'Sasso Carta Forbici';
-  let defaultAvatar = 'https://i.ibb.co/BKHtdBNp/default-avatar-profile-icon-1280x1280.jpg';
+  let defaultAvatar = 'https://i.ibb.co/YrWKV59/varebot-pfp.png';
   
   // Funzione per creare l'immagine VS
   const createVSImage = async (player1Name, player2Name, avatar1, avatar2) => {
