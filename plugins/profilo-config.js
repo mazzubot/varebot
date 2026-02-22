@@ -36,7 +36,7 @@ let handler = async (m, { conn, text, usedPrefix, command }) => {
     }
 
     let name = await conn.getName(m.sender)
-    let pp = await conn.profilePictureUrl(m.sender, 'image').catch(_ => 'https://i.ibb.co/YrWKV59/varebot-pfp.png')
+    let pp = await conn.profilePictureUrl(m.sender, 'image').catch(_ => 'https://i.ibb.co/BKHtdBNp/default-avatar-profile-icon-1280x1280.jpg')
     let currentLevel = user.level || calculateLevel(user.exp || 0)
     let phone = PhoneNumber('+' + m.sender.split('@')[0]).getNumber('international')
     

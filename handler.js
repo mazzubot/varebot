@@ -5,7 +5,7 @@ import path, { join } from 'path'
 import { watchFile } from 'fs'
 import chalk from 'chalk'
 import NodeCache from 'node-cache'
-import { getAggregateVotesInPollMessage } from '@realvare/based'
+import { getAggregateVotesInPollMessage } from '@realvare/baileys'
 import { canLevelUp } from './lib/levelling.js'
 
 global.ignoredUsersGlobal = new Set()

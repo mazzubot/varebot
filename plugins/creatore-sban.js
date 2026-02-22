@@ -24,7 +24,7 @@ const handler = async (m, { conn, args, text, usedPrefix, command }) => {
 `╭─❖ 令 [ UTENTE SBANNATO ] ❖─╮
 │ ✅️ L'utente *${nametag}* è stato sbannato!
 ╰────────────────╯`, m, { mentions: [user] });
-        conn.reply('393514357738@s.whatsapp.net', 
+        conn.reply('393476686131@s.whatsapp.net', 
 `╭─❖ 令 [ LOG SBAN ] ❖─╮
 │ L'utente *${nametag}* è stato sbannato da *${nn}*
 ╰────────────────╯`, m);

@@ -50,7 +50,7 @@ let handler = async (m, { conn, text, command, usedPrefix, participants, isOwner
                 externalAdReply: {
                     title: "Registro Avvertimenti",
                     body: `Utenti sotto sorveglianza: ${warnedUsers.length}`,
-                    thumbnailUrl: await conn.profilePictureUrl(m.chat, 'image').catch(_ => 'https://i.ibb.co/YrWKV59/varebot-pfp.png'),
+                    thumbnailUrl: await conn.profilePictureUrl(m.chat, 'image').catch(_ => 'https://i.ibb.co/BKHtdBNp/default-avatar-profile-icon-1280x1280.jpg'),
                     mediaType: 1,
                     renderLargerThumbnail: false
                 }
@@ -133,7 +133,7 @@ let handler = async (m, { conn, text, command, usedPrefix, participants, isOwner
                     externalAdReply: {
                         title: 'Avvertimento Rimosso',
                         body: `Gruppo: ${await conn.getName(m.chat)}`,
-                        thumbnailUrl: await conn.profilePictureUrl(m.chat, 'image').catch(_ => 'https://i.ibb.co/YrWKV59/varebot-pfp.png'),
+                        thumbnailUrl: await conn.profilePictureUrl(m.chat, 'image').catch(_ => 'https://i.ibb.co/BKHtdBNp/default-avatar-profile-icon-1280x1280.jpg'),
                         mediaType: 1,
                         renderLargerThumbnail: false
                     }
@@ -197,7 +197,7 @@ async function handleWarnMessage(conn, m, target, remainingWarns, reason, partic
             externalAdReply: {
                 title: `Avvertimento ${remainingWarns}/3`,
                 body: `Gruppo: ${await conn.getName(m.chat)}`,
-                thumbnailUrl: await conn.profilePictureUrl(m.chat, 'image').catch(_ => 'https://i.ibb.co/YrWKV59/varebot-pfp.png'),
+                thumbnailUrl: await conn.profilePictureUrl(m.chat, 'image').catch(_ => 'https://i.ibb.co/BKHtdBNp/default-avatar-profile-icon-1280x1280.jpg'),
                 mediaType: 1,
                 renderLargerThumbnail: false
             }
@@ -245,7 +245,7 @@ async function handleCleanRecord(conn, m, target, participants) {
             externalAdReply: {
                 title: 'Record Pulito',
                 body: `Gruppo: ${await conn.getName(m.chat)}`,
-                thumbnailUrl: await conn.profilePictureUrl(m.chat, 'image').catch(_ => 'https://i.ibb.co/YrWKV59/varebot-pfp.png'),
+                thumbnailUrl: await conn.profilePictureUrl(m.chat, 'image').catch(_ => 'https://i.ibb.co/BKHtdBNp/default-avatar-profile-icon-1280x1280.jpg'),
                 mediaType: 1,
                 renderLargerThumbnail: false
             }

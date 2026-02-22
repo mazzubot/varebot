@@ -6,28 +6,29 @@ const PERM = {
   sam: 'sam',
 };
 
-const thisnthat = [
+const featureRegistry = [
   { key: 'welcome', store: 'chat', perm: PERM.ADMIN, aliases: ['benvenuto'], groupOnly: true, name: '👋 Welcome', desc: 'Messaggio di benvenuto' },
   { key: 'goodbye', store: 'chat', perm: PERM.ADMIN, aliases: ['addio'], groupOnly: true, name: '🚪 Addio', desc: 'Messaggio di addio' },
   { key: 'antispam', store: 'chat', perm: PERM.ADMIN, aliases: [], name: '🛑 Antispam', desc: 'Antispam' },
-  { key: 'antisondaggi', store: 'chat', perm: PERM.ADMIN, aliases: ['antipoll'], name: '📊🚫 Anti-sondaggi', desc: 'Blocca la creazione di sondaggi (solo non-admin)' },
+  { key: 'antisondaggi', store: 'chat', perm: PERM.ADMIN, aliases: [], name: '📊🚫 Anti-sondaggi', desc: 'Blocca la creazione di sondaggi (solo non-admin)' },
   { key: 'antiparolacce', store: 'chat', perm: PERM.ADMIN, aliases: ['antitossici'], name: '🧼 Filtro parolacce', desc: 'Avverte e rimuove per parolacce/insulti' },
   { key: 'antiBot', store: 'chat', perm: PERM.ADMIN, aliases: ['antibot', 'antibots'], name: '🤖❌ Antibot', desc: 'Rimuove eventuali bot indesiderati' },
+  { key: 'antiBot2', store: 'chat', perm: PERM.ADMIN, aliases: ['antisubbots', 'antisub'], name: '🤖🚫 Anti-subbots', desc: 'Blocca sub-bot nel gruppo' },
   { key: 'antitrava', store: 'chat', perm: PERM.ADMIN, aliases: [], name: '🧨❌ Antitrava', desc: 'Blocca messaggi troppo lunghi (trava)' },
   { key: 'antimedia', store: 'chat', perm: PERM.ADMIN, aliases: [], groupOnly: true, name: '🖼️❌ Antimedia', desc: 'Elimina foto/video permanenti' },
   { key: 'antioneview', store: 'chat', perm: PERM.ADMIN, aliases: ['antiviewonce'], groupOnly: true, name: '👁️‍🗨️ Antiviewonce', desc: 'Antiviewonce' },
   { key: 'antitagall', store: 'chat', perm: PERM.ADMIN, aliases: ['anti-tagall', 'antimentioni'], groupOnly: true, name: '🏷️🚫 Anti-tagall', desc: 'Elimina e avverte se vengono menzionati troppi membri' },
-  { key: 'autotrascrizione', store: 'chat', perm: PERM.ADMIN, aliases: ['autotrascrivi', 'trascrizione', 'autotranscribe', 'autotranscription', 'trascrivi'], groupOnly: true, name: '📝🎧 Auto-trascrizione', desc: 'Trascrive automaticamente i vocali/audio (anche view-once)' },
-  { key: 'autotraduzione', store: 'chat', perm: PERM.ADMIN, aliases: ['autotraduci', 'autotranslate', 'traduzione', 'traduci', 'traduzioni'], groupOnly: true, name: '🌍🈯 Auto-traduzione', desc: 'Traduce automaticamente i messaggi (in italiano)' },
+  { key: 'autotrascrizione', store: 'chat', perm: PERM.ADMIN, aliases: ['autotrascrivi', 'autotranscribe', 'autotranscription'], groupOnly: true, name: '📝🎧 Auto-trascrizione', desc: 'Trascrive automaticamente i vocali/audio (anche view-once)' },
+  { key: 'autotraduzione', store: 'chat', perm: PERM.ADMIN, aliases: ['autotraduci', 'autotranslate'], groupOnly: true, name: '🌍🈯 Auto-traduzione', desc: 'Traduce automaticamente i messaggi (in italiano)' },
   { key: 'rileva', store: 'chat', perm: PERM.ADMIN, aliases: ['detect'], groupOnly: true, name: '📡 Rileva', desc: 'Rileva eventi gruppo' },
   { key: 'antiporno', store: 'chat', perm: PERM.ADMIN, aliases: ['antiporn', 'antinsfw'], name: '🔞 Antiporno', desc: 'Antiporno' },
   { key: 'antigore', store: 'chat', perm: PERM.ADMIN, aliases: [], name: '🚫 Antigore', desc: 'Antigore' },
   { key: 'modoadmin', store: 'chat', perm: PERM.ADMIN, aliases: ['soloadmin'], name: '🛡️ Soloadmin', desc: 'Solo gli admin possono usare i comandi' },
   { key: 'ai', store: 'chat', perm: PERM.ADMIN, aliases: ['ia'], groupOnly: true, name: '🧠 IA', desc: 'Intelligenza artificiale' },
   { key: 'vocali', store: 'chat', perm: PERM.ADMIN, aliases: ['siri'], groupOnly: true, name: '🎤 Siri', desc: 'Risponde con audio agli audio e msg ricevuti' },
-  { key: 'antivoip', store: 'chat', perm: PERM.ADMIN, aliases: ['antiarabi', 'antipaki', 'antistranieri'], name: '📞❌ Antivoip', desc: 'Antivoip' },
+  { key: 'antivoip', store: 'chat', perm: PERM.ADMIN, aliases: [], name: '📞❌ Antivoip', desc: 'Antivoip' },
   { key: 'antiLink', store: 'chat', perm: PERM.ADMIN, aliases: ['antilink', 'nolink'], name: '🔗❌ Antilink', desc: 'Antilink whatsapp' },
-  { key: 'antiLinkUni', store: 'chat', perm: PERM.ADMIN, aliases: ['antilinkuni', 'antilinkuniversale', 'antilinktutto', 'antilinkall'], name: '🌍🔗❌ Antilink universale', desc: 'Blocca tutti i tipi di link' },
+  { key: 'antiLinkUni', store: 'chat', perm: PERM.ADMIN, aliases: ['antilinkuni', 'antilinkuniversale', 'antilinktutto'], name: '🌍🔗❌ Antilink universale', desc: 'Blocca tutti i tipi di link' },
   { key: 'antiLink2', store: 'chat', perm: PERM.ADMIN, aliases: ['antilink2', 'antilinkhard', 'antilinksocial'], name: '🌐❌ Antilinksocial', desc: 'Blocca tutti i link di social. Per singoli: .attiva antiig/antitiktok/antiyt..' },
   { key: 'reaction', store: 'chat', perm: PERM.ADMIN, aliases: ['reazioni'], groupOnly: true, name: '😎 Reazioni', desc: 'Reazioni automatiche' },
   { key: 'autolevelup', store: 'chat', perm: PERM.ADMIN, aliases: ['autolivello', 'autolvl'], name: '⬆️ Autolivello', desc: 'Messaggio di livello automatico' },
@@ -45,16 +46,17 @@ const thisnthat = [
   { key: 'antiLink2_linkedin', store: 'chat', perm: PERM.ADMIN, aliases: ['antilinkedin'], name: '💼🚫 Anti-LinkedIn', desc: 'Blocca link LinkedIn' },
   { key: 'antiLink2_github', store: 'chat', perm: PERM.ADMIN, aliases: ['antigithub'], name: '🐙🚫 Anti-GitHub', desc: 'Blocca link GitHub' },
   { key: 'antiprivato', store: 'bot', perm: PERM.OWNER, aliases: ['antipriv'], name: '🔒 Blocco privato', desc: 'Blocca chi scrive in privato al bot' },
-  { key: 'solocreatore', store: 'bot', perm: PERM.sam, aliases: ['solowner', 'soloowner'], name: '👑 Solocreatore', desc: 'Solo il creatore puo usare i comandi' },
+  { key: 'soloe', store: 'bot', perm: PERM.sam, aliases: ['solocreatore', 'solowner', 'soloowner'], name: '👑 Solocreatore', desc: 'Solo il creatore puo usare i comandi' },
   { key: 'multiprefix', store: 'bot', perm: PERM.OWNER, aliases: ['multiprefisso', 'multipref'], onToggle: 'multiprefix', name: '🔣 Multiprefix', desc: 'Permette più prefissi (es: .!/)' },
+  { key: 'jadibotmd', store: 'bot', perm: PERM.OWNER, aliases: ['subbots', 'jadibotmd'], name: '🧬 Subbots', desc: 'Bot multi-sessione' },
   { key: 'antispambot', store: 'bot', perm: PERM.OWNER, aliases: [], name: '🤖🛑 Anti-spam comandi', desc: 'Limita lo spam di comandi (globale in tutti i gruppi)' },
   { key: 'autoread', store: 'bot', perm: PERM.OWNER, aliases: ['read', 'lettura'], name: '👀 Lettura', desc: 'Il bot legge automaticamente i messaggi (poco + lag - ban)' },
-  { key: 'anticall', store: 'bot', perm: PERM.sam, aliases: ['antichiamate'], name: '❌📞 Antichiamate', desc: 'Rifiuta automaticamente le chiamate al bot' },
+  { key: 'anticall', store: 'bot', perm: PERM.sam, aliases: [], name: '❌📞 Antichiamate', desc: 'Rifiuta automaticamente le chiamate al bot' },
   { key: 'registrazioni', store: 'bot', perm: PERM.OWNER, aliases: ['registrazione', 'reg'], name: '📛 Obbligo registrazione', desc: 'Richiede registrazione per usare alcuni comandi' },
 ];
 
 const aliasMap = new Map();
-for (const feat of thisnthat) {
+for (const feat of featureRegistry) {
   aliasMap.set(feat.key.toLowerCase(), feat);
   for (const alias of feat.aliases) {
     aliasMap.set(alias.toLowerCase(), feat);
@@ -69,11 +71,12 @@ const adminkeyz = new Set([
   'antiLink2', 'reaction', 'autolevelup'
 ]);
 const ownerkeyz = new Set([
-  'antiprivato', 'solocreatore', 'multiprefix', 'antispambot', 'autoread', 'anticall', 'registrazioni'
+  'antiprivato', 'soloCreatore', 'multiprefix', 'jadibotmd',
+  'antispambot', 'autoread', 'anticall', 'registrazioni'
 ]);
 
-const adminz = thisnthat.filter(f => adminkeyz.has(f.key));
-const ownerz = thisnthat.filter(f => ownerkeyz.has(f.key));
+const adminz = featureRegistry.filter(f => adminkeyz.has(f.key));
+const ownerz = featureRegistry.filter(f => ownerkeyz.has(f.key));
 
 function checkPermission(feat, { m, isAdmin, isOwner, isSam }) {
   if (feat.groupOnly && !m.isGroup && !isOwner) {

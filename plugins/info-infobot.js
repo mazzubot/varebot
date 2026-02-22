@@ -21,7 +21,8 @@ let handler = async (m, { conn, usedPrefix }) => {
   const funzioni = [
     ['blocco privato', Boolean(bot.antiprivato)],
     ['limite comandi', Boolean(bot.antispambot)],
-    ['autolettura', Boolean(bot.autoread)]
+    ['autolettura', Boolean(bot.autoread)],
+    ['subbots', Boolean(bot.jadibotmd)]
   ] // da aggiungere tutte le nuove funzioni (o usare un sistema automatizzato idk)
   const statoFunzioni = funzioni
     .map(([nome, val]) => formatRow(nome, val))
@@ -29,6 +30,7 @@ let handler = async (m, { conn, usedPrefix }) => {
   let _uptime = process.uptime() * 1000
   let uptime = formatUptime(_uptime)
   let totalreg = Object.keys(global.db.data.users || {}).length
+  let totalStats = Object.values(global.db.data.stats || {}).reduce((total, stat) => total + (stat?.total || 0), 0)
   let totalf = Object.values(global.plugins || {}).filter((v) => v?.help && v?.tags).length
 
   let timestamp = speed()
@@ -53,6 +55,7 @@ let handler = async (m, { conn, usedPrefix }) => {
 │ 『 ✨ 』 \`Velocità:\` *${latensi.toFixed(4)} ms*
 │ 『 🕐 』 \`Uptime:\` *${uptime}*
 │ 『 🌙 』 \`Modalità:\` *${bot.public ? 'Pubblica' : 'Privata'}*
+│ 『 💎 』 \`Comandi Eseguiti:\` *${toNum(totalStats)}*
 │ 『 👥 』 \`Utenti Registrati:\` *${toNum(totalreg)}*
 │
 │『 ⚙️ 』  *\`Stato Funzioni:\`*

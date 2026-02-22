@@ -7,21 +7,11 @@ let handler = async (m, { conn, text }) => {
 │ *Inserisci un indirizzo IP*
 │
 │ 『 📝 』\`Esempio:\`
-│ *.ip 116.0.193.76*
+│ *.ip 116.0.1938.76*
 *╰⭒─ׄ─ׅ─ׄ─⭒─ׄ─ׅ─ׄ─*`, m)
     }
+    const wait = await conn.reply(m.chat, `『 🕸️ 』 *Ricerca in corso...*`, m)
 
-    const ipRegex = /^(?:(?:25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)\.){3}(?:25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)$/
-    if (!ipRegex.test(text.trim())) {
-        return conn.reply(m.chat, `
-╭
-│ *❌ IP non valido*
-│
-│ 『 📝 』\`Formato corretto:\`
-│ *.ip 116.0.193.76*
-│
-*╰⭒─ׄ─ׅ─ׄ─⭒─ׄ─ׅ─ׄ─*`, m)
-    }
     try {
         const response = await fetch(`http://ip-api.com/json/${text}?fields=status,message,country,countryCode,region,regionName,city,district,zip,lat,lon,timezone,isp,org,as,mobile,hosting,query`)
         const data = await response.json()
@@ -48,15 +38,15 @@ let handler = async (m, { conn, text }) => {
 *╰⭒─ׄ─ׅ─ׄ─⭒─ׄ─ׅ─ׄ─*`
 
         await conn.sendMessage(m.chat, {
-            text: result,
-            quoted: m
+            edit: wait.key,
+            text: result
         })
 
     } catch (error) {
         console.error(error)
         await conn.sendMessage(m.chat, {
-            text: global.errore,
-            quoted: m
+            edit: wait.key,
+            text: global.errore
         })
     }
 }

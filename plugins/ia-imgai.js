@@ -1,52 +1,61 @@
-import fetch from 'node-fetch'
-
+import axios from "axios";
 async function generateImage(prompt) {
     try {
-        const imageQuery = encodeURIComponent(prompt + " professional photography, 8k uhd, highly detailed, photorealistic, sharp focus, masterpiece")
-        const imageUrl = `https://image.pollinations.ai/prompt/${imageQuery}?width=1024&height=1024&nologo=true&seed=${Math.floor(Math.random() * 1000)}`
-        
-        const response = await fetch(imageUrl)
-        if (!response.ok) throw new Error('Failed to fetch image')
-        
-        const buffer = await response.buffer()
-        return buffer.toString('base64')
+        let attempts = 0;
+        while (attempts < 3) {
+            try {
+                const encodedPrompt = encodeURIComponent(
+                    `${prompt}, professional photography, 8k uhd, highly detailed, photorealistic, sharp focus, masterpiece`
+                );
+                const imageUrl = `https://image.pollinations.ai/prompt/${encodedPrompt}?width=1024&height=1024&nologo=true&seed=${Math.floor(Math.random() * 1000000)}`;
+                const response = await axios.get(imageUrl, {
+                    responseType: 'arraybuffer',
+                    timeout: 45000
+                });
+
+                return Buffer.from(response.data).toString('base64');
+            } catch (error) {
+                attempts++;
+                if (attempts === 3) throw error;
+                await new Promise(resolve => setTimeout(resolve, 3000));
+            }
+        }
     } catch (error) {
-        console.error('Errore generazione:', error)
-        throw new Error('Errore nella generazione dell\'immagine')
+        console.error('Errore generazione:', error);
+        throw new Error('Errore nella generazione dell\'immagine');
     }
 }
 
 let handler = async (m, { conn, text, usedPrefix, command, isOwner }) => {
     if (!text) {
-        return m.reply(`ㅤㅤㅤㅤ⋆｡˚『 🎨 \`IMGAI\` 』˚｡⋆
-╭
-✦ 『💡』 \`Uso:\` *${usedPrefix + command} <descrizione>*
-✧ 『📝』 \`Esempio:\` *${usedPrefix + command} gatto persiano*
-✦ 『⚡』 \`Limiti:\`
-✧ •  Free: 5 generazioni
-✦ •  Premium: ∞ generazioni
-╰⭒─ׄ─ׅ─ׄ─⭒─ׄ─ׅ─ׄ─⭒`.trim());
+        return m.reply(`╭─『 🎨 *Generatore Immagini AI* 』
+├ Usa: ${usedPrefix + command} <descrizione>
+├ Esempio: ${usedPrefix + command} gatto persiano
+│
+├ *Limiti:*
+├ • Free: 5 generazioni
+├ • Premium: ∞ generazioni
+╰───────────◈`);
     }
     if (!global.db.data.users[m.sender].imgaiUses) {
         global.db.data.users[m.sender].imgaiUses = 0;
     }
     const isPremium = global.db.data.users[m.sender].premium;
     if (!isOwner && !isPremium && global.db.data.users[m.sender].imgaiUses >= 5) {
-        return m.reply(`ㅤㅤㅤㅤ⋆｡˚『❌ \`LIMITE\`』˚｡⋆
-╭
-✦ 『⚠️』 \`Hai usato tutti i tentativi gratuiti!\`
-✧
-✦ 『✨』 \`Passa a Premium per avere:\`
-✧ • Generazioni illimitate
-✦ • Risultati prioritari
-✧ • Qualità migliore
-╰⭒─ׄ─ׅ─ׄ─⭒─ׄ─ׅ─ׄ─⭒`.trim());
+        return m.reply(`╭─『 ❌ *Limite Raggiunto* 』
+├ Hai utilizzato tutti i tentativi gratuiti!
+├ 
+├ *✨ Passa a Premium per avere:*
+├ • Generazioni illimitate
+├ • Risultati prioritari
+├ • Qualità migliore
+╰───────────◈`);
     }
 
     try {
         await conn.sendPresenceUpdate('composing', m.chat);
         const startTime = Date.now();
-        const enhancedPrompt = `${text}`;
+        const enhancedPrompt = `${text}, masterpiece, professional photography, 8k uhd, highly detailed, photorealistic, sharp focus, dramatic lighting, artstation trending`;
         const imageBase64 = await Promise.race([
             generateImage(enhancedPrompt),
             new Promise((_, reject) => 
@@ -63,13 +72,14 @@ let handler = async (m, { conn, text, usedPrefix, command, isOwner }) => {
             m.chat,
             {
                 image: Buffer.from(imageBase64, 'base64'),
-                caption: `ㅤㅤㅤㅤ⋆｡˚『🎨 \`GENERATA\`』˚｡⋆
-╭
-✦ 『💭』 \`Prompt:\` *${text}*
-✧ 『⏱️』 \`Tempo:\` *${timeElapsed}s*
-✦ 『💫』 \`Rimanenti:\` *${usesLeft}*
-✧ 『👑』 \`Status:\` *${isPremium ? 'Premium' : 'Free'}*
-╰⭒─ׄ─ׅ─ׄ─⭒─ׄ─ׅ─ׄ─⭒`.trim(),
+                caption: `╭─『 🎨 *Immagine Generata* 』
+├ ✨ *Prompt:* ${text}
+├ ⏱️ *Tempo:* ${timeElapsed}s
+├ 💫 *Generazioni:* ${usesLeft} rimaste
+├ 👑 *Status:* ${isPremium ? 'Premium' : 'Free'}
+╰───────────◈
+
+◈ ━━ *vare ✧ bot* ━━ ◈`,
                 fileName: 'generated_image.png'
             },
             { quoted: m }
@@ -77,12 +87,11 @@ let handler = async (m, { conn, text, usedPrefix, command, isOwner }) => {
         await conn.sendPresenceUpdate('paused', m.chat);
     } catch (error) {
         console.error('Errore:', error);
-        m.reply(`ㅤㅤㅤㅤ⋆｡˚『❌ \`ERRORE\`』˚｡⋆
-╭
-✦ 『⚠️』 \`${error.message}\`
-✧ 『🔄』 \`Riprova tra qualche minuto\`
-✦ ['💡'] \`Usa un prompt diverso\`
-╰⭒─ׄ─ׅ─ׄ─⭒─ׄ─ׅ─ׄ─⭒`.trim());
+        m.reply(`╭─『 ❌ *Errore Generazione* 』
+├ • ${error.message}
+├ • Riprova tra qualche minuto
+├ • Usa un prompt diverso
+╰──────────────────◈`);
     }
 };
 handler.help = ['imgai (testo)'];

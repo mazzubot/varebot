@@ -261,7 +261,7 @@ async function getGeminiResponse(question, history) {
 }
 
 handler.command = ['gemini', 'gem', 'ai', 'ia'];
-handler.tags = ['ai', 'iatesto'];
+handler.tags = ['ai'];
 handler.help = ['gemini <testo>'];
 handler.register = true;
 export default handler;

@@ -79,7 +79,7 @@ let handler = async (m, { conn, usedPrefix }) => {
     let user = global.db.data.users[m.sender]
     let name = await conn.getName(m.sender)
     let pp = await conn.profilePictureUrl(m.sender, 'image')
-        .catch(() => 'https://i.ibb.co/YrWKV59/varebot-pfp.png')
+        .catch(() => 'https://i.ibb.co/BKHtdBNp/default-avatar-profile-icon-1280x1280.jpg')
     
     if (!user.profile) user.profile = {}
     

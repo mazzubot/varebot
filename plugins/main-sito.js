@@ -32,7 +32,7 @@ const handler = async (m, { conn }) => {
               name: 'cta_url',
               buttonParamsJson: JSON.stringify({
                 display_text: '💬 WhatsApp',
-                url: 'https://wa.me/393514357738'
+                url: 'https://wa.me/393476686131'
               })
             },
             {

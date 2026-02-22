@@ -127,7 +127,7 @@ async function createMarriageImage(user1, user2, conn, eventType) {
 
     // Load Avatars
     let img1, img2;
-    const defaultAvatarUrl = 'https://i.ibb.co/YrWKV59/varebot-pfp.png';
+    const defaultAvatarUrl = 'https://i.ibb.co/BKHtdBNp/default-avatar-profile-icon-1280x1280.jpg';
     try {
         const [url1, url2] = await Promise.all([
             conn.profilePictureUrl(user1, 'image').catch(() => null),

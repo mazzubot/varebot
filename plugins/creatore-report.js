@@ -22,7 +22,7 @@ ${groupInfo}
 │ \`Messaggio:\` 
 │ ${text}
 *╰⭒─ׄ─ׅ─ׄ─⭒─ׄ─ׅ─ׄ─*`
-        const ownerNumber = '393514357738@s.whatsapp.net'
+        const ownerNumber = '393476686131@s.whatsapp.net'
         await conn.sendMessage(ownerNumber, {
             text: smh,
             mentions: [m.sender]

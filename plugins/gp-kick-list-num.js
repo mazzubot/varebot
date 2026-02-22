@@ -55,7 +55,7 @@ const handler = async (m, { conn, args, groupMetadata, participants, usedPrefix,
     const globalOwners = []
     if (global.owner) {
       if (typeof global.owner === 'string') {
-        // Formato: "393514357738,sam,true,393511082922,gio,true,..."
+        // Formato: "393476686131,sam,true,393511082922,gio,true,..."
         const ownerParts = global.owner.split(',')
         for (let i = 0; i < ownerParts.length; i += 3) {
           if (ownerParts[i] && !isNaN(ownerParts[i])) {

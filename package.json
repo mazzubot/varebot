@@ -41,7 +41,7 @@
     "qr": "node based.js qr"
   },
   "dependencies": {
-    "@realvare/based": "latest",
+    "@realvare/baileys": "latest",
     "awesome-phonenumber": "^3.4.0",
     "axios": "^1.12.2",
     "canvas": "^3.2.0",

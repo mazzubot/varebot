@@ -366,83 +366,9 @@ async function readQRCode(imageBuffer) {
     return jsqrResult || await readQRCodeWithExternalApi(imageBuffer);
 }
 
-async function scanMediaForQrCode(mediaBuffer, mimeType = '', isAnimated = false) {
-    if (!mediaBuffer) return false;
-
-    try {
-        let bufferToScan = mediaBuffer;
-        const mime = (mimeType || '').toLowerCase();
-
-        if (mime.includes('video')) {
-            const frameBuffer = await extractFrameFromVideo(mediaBuffer);
-            if (!frameBuffer) return false;
-            bufferToScan = frameBuffer;
-        }
-
-        if (mime.includes('sticker') && isAnimated) {
-            return false;
-        }
-
-        const qrData = await readQRCode(bufferToScan);
-        if (!qrData) return false;
-
-        return await containsSuspiciousLink(String(qrData));
-    } catch {
-        return false;
-    }
-}
-
-async function handleViolation(conn, m, reasonMessage, isBotAdmin) {
-    const target = m.sender;
-
-    await conn.sendMessage(m.chat, {
-        text: reasonMessage,
-        mentions: target ? [target] : []
-    }).catch(() => {});
-
-    await conn.sendMessage(m.chat, { delete: m.key }).catch(() => {});
-
-    if (isBotAdmin && target) {
-        await conn.groupParticipantsUpdate(m.chat, [target], 'remove').catch(() => {});
-    }
-}
-
 async function checkForShortUrls(text) {
     if (!text) return false;
     return SHORT_URL_REGEX.test(text);
-}
-
-function extractTextFromMessage(m, excludeQuoted = false) {
-    const texts = [];
-    const seen = new Set();
-    const IGNORED_KEYS = [
-        'fileSha256', 'mediaKey', 'fileEncSha256', 'jpegThumbnail',
-        'participant', 'stanzaId', 'remoteJid', 'id'
-    ];
-
-    function recursiveExtract(obj) {
-        if (!obj || typeof obj !== 'object') return;
-        if (seen.has(obj)) return;
-        seen.add(obj);
-        if (Buffer.isBuffer(obj)) return;
-
-        for (const key in obj) {
-            if (excludeQuoted && key === 'quotedMessage') continue;
-            if (IGNORED_KEYS.includes(key)) continue;
-            const value = obj[key];
-            if (typeof value === 'string' && value.length > 0) {
-                texts.push(value);
-            } else if (typeof value === 'object') {
-                recursiveExtract(value);
-            }
-        }
-    }
-
-    if (m?.text) texts.push(m.text);
-    if (m?.caption) texts.push(m.caption);
-    recursiveExtract(unwrapMessageContent(m));
-
-    return texts.join(' ').replace(/[\s\u200b\u200c\u200d\uFEFF\u2060\u00A0]+/g, ' ').trim();
 }
 
 async function containsSuspiciousLink(text) {
@@ -487,42 +413,6 @@ function getMediaName(mimeType) {
     if (mimeType.includes('sticker')) return 'sticker';
     if (mimeType.includes('video')) return 'video';
     return 'immagine';
-}
-
-function hasQuotedMessage(message) {
-    const root = unwrapMessageContent(message);
-    const seen = new Set();
-
-    function visit(obj) {
-        if (!obj || typeof obj !== 'object') return false;
-        if (seen.has(obj)) return false;
-        seen.add(obj);
-        if (Buffer.isBuffer(obj)) return false;
-
-        if (obj?.contextInfo?.quotedMessage) return true;
-
-        for (const key of Object.keys(obj)) {
-            const value = obj[key];
-            if (key === 'quotedMessage' && value && typeof value === 'object') return true;
-            if (value && typeof value === 'object' && visit(value)) return true;
-        }
-        return false;
-    }
-
-    return visit(root);
-}
-
-function isQuoteOnlyMessage(m) {
-    const hasQuote = hasQuotedMessage(m);
-    if (!hasQuote) return false;
-
-    const ownText = extractTextFromMessage(m, true);
-    if (ownText) return false;
-
-    const ownMedia = findFirstMediaMessage(m, { excludeQuoted: true });
-    if (ownMedia) return false;
-
-    return true;
 }
 
 export async function before(m, { conn, isAdmin, isBotAdmin, isOwner, isSam }) {

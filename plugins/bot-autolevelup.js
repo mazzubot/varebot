@@ -31,7 +31,7 @@ export async function before(m, { conn }) {
                 profilePic = await conn.profilePictureUrl(m.sender, 'image')
             } catch {
                 
-                profilePic = 'https://i.ibb.co/YrWKV59/varebot-pfp.png'
+                profilePic = 'https://i.ibb.co/BKHtdBNp/default-avatar-profile-icon-1280x1280.jpg'
             }
             
             const width = 1200

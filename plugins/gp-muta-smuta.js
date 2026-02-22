@@ -15,7 +15,7 @@ async function getUserProfilePic(conn, userId) {
         const pp = await conn.profilePictureUrl(userId, 'image')
         return pp
     } catch {
-        return 'https://i.ibb.co/YrWKV59/varebot-pfp.png'
+        return 'https://i.ibb.co/BKHtdBNp/default-avatar-profile-icon-1280x1280.jpg'
     }
 }
 

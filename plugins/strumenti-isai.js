@@ -2,7 +2,7 @@ import { downloadContentFromMessage } from '@realvare/based'
 
 let handler = async (m, { conn, text, usedPrefix, command }) => {
     if (!m.quoted && !m.message?.imageMessage) {
-        return m.reply(`✨ *Quota un'immagine o invia con caption:\n*${usedPrefix + command}*`)
+        return m.reply(`✨ *Rileva Immagine AI*\n\nQuota un'immagine o invAIla con caption:\n*${usedPrefix + command}*`)
     }
 
     conn.sendMessage(m.chat, { text: '🔍 Analizzando l\'immagine per tracce di AI... ⏳' }, { quoted: m })

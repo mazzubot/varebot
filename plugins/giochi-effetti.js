@@ -380,7 +380,7 @@ let handler = async (m, { conn, text, usedPrefix, command }) => {
     await fs.mkdir('temp', { recursive: true }).catch(console.error);
     if (effect === 'napoli' || effect === 'forzanapoli') {
         let who = m.quoted ? m.quoted.sender : m.mentionedJid && m.mentionedJid[0] ? m.mentionedJid[0] : m.fromMe ? conn.user.jid : m.sender
-        let pp = await conn.profilePictureUrl(who, 'image').catch(_ => 'https://i.ibb.co/YrWKV59/varebot-pfp.png')
+        let pp = await conn.profilePictureUrl(who, 'image').catch(_ => 'https://i.ibb.co/BKHtdBNp/default-avatar-profile-icon-1280x1280.jpg')
         
         try {
             let pfp = await Jimp.read(pp)

@@ -96,7 +96,7 @@ handler.before = async function (m, { conn }) {
 
     await conn.sendMessage(
       m.chat,
-      { text: `『 🌍 』 Traduzione (${detected || 'auto'} → it):\n- ${translated}`, contextInfo: global.fake.contextInfo },
+      { text: `『 🌍 』 Traduzione (${detected || 'auto'} → it):\n- ${translated}` },
       { quoted: m }
     ).catch(() => {})
   } catch (e) {

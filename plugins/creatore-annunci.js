@@ -1,6 +1,6 @@
 const owner = ['393476686131@s.whatsapp.net']
 const staff = [
-  '39gimmepussybloodclat@s.whatsapp.net', // aggiungi qui altri membri dello staff 
+  '39gimmepussybloodclat@s.whatsapp.net', // aggiungi qui altri membri dello staff
 ]
 
 const handler = async (m, { conn, args }) => {

@@ -3,7 +3,7 @@ import React from 'react';
 import ReactDOMServer from 'react-dom/server';
 import { promises as fs } from 'fs';
 
-const braquage = 'https://i.ibb.co/YrWKV59/varebot-pfp.png';
+const braquage = 'https://i.ibb.co/BKHtdBNp/default-avatar-profile-icon-1280x1280.jpg';
 const varebot = './media/menu/menu.jpg';
 let defaultAvatarBuffer = null;
 let browser = null;

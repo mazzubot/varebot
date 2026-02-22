@@ -97,7 +97,7 @@ let handler = async (m, { conn, args, usedPrefix, command, text }) => {
 }
 
 handler.help = ['database']
-handler.tags = ['creatore']
+handler.tags = ['owner']
 handler.command = /^db$/i
 handler.owner = true
 

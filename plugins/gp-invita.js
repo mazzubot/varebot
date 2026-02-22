@@ -1,5 +1,5 @@
 let handler = async (m, { conn, args, text, usedPrefix, command, participants }) => {
-    if (!text) throw `🌸 Inserisci il numero a cui vuoi inviare un invito al gruppo\n\n令 Esempio:\n*${usedPrefix + command}* 393514357738`;
+    if (!text) throw `🌸 Inserisci il numero a cui vuoi inviare un invito al gruppo\n\n令 Esempio:\n*${usedPrefix + command}* 393476686131`;
 
     let numeroPulito = text.replace(/[^0-9]/g, '');
     if (!numeroPulito) throw '🌸 Inserisci solo numeri con il prefisso internazionale.';

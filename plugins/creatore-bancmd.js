@@ -42,7 +42,7 @@ ${usedPrefix + command} @user play
 }
 
 handler.help = ['bancmd @user comando']
-handler.tags = ['creatore']
+handler.tags = ['owner']
 handler.command = /^(bancmd|blockcmd)$/i
 handler.owner = true 
 

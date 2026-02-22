@@ -14,7 +14,7 @@ let handler = async (m, { conn, usedPrefix, command }) => {
         if (/toimg|convertiimmagine|foto/i.test(command)) {
             let out = await webp2png(media);
             await conn.sendFile(m.chat, out, 'out.png', '> \`vare ✧ bot\`', m);
-        } else if (/tovideo|convertivideo|video|tovid|tomp4/i.test(command)) {
+        } else if (/tovideo|convertivideo|video|tovid/i.test(command)) {
             let out = await webp2mp4(media);
             await conn.sendFile(m.chat, out, 'out.mp4', '> \`vare ✧ bot\`', m);
         }
@@ -26,6 +26,6 @@ let handler = async (m, { conn, usedPrefix, command }) => {
 
 handler.help = ['toimg', 'tovideo'];
 handler.tags = ['sticker'];
-handler.command = ['toimg', 'convertiimmagine', 'foto', 'tovideo', 'convertivideo', 'video', 'tovid', 'tomp4'];
+handler.command = ['toimg', 'convertiimmagine', 'foto', 'tovideo', 'convertivideo', 'video', 'tovid'];
 
 export default handler;

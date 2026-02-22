@@ -160,7 +160,7 @@ let handler = async (m, { conn, text }) => {
 };
 
 handler.help = ['gpt <testo>'];
-handler.tags = ['ai', 'iatesto'];
+handler.tags = ['ai', 'aitesto'];
 handler.command = /^(gpt|chatgpt)$/i;
 
 export default handler;

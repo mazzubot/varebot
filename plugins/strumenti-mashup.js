@@ -19,8 +19,6 @@ const KEYWORDS = {
     instrumental: ['instrumental', 'karaoke', 'backing track', 'minus one', 'no vocals', 'beat only', 'inst', 'official instrumental', 'beat', 'backing', 'prod by']
 }
 
-// --- Analisi Audio (BPM & Durata) ---
-
 async function getAudioInfo(filePath) {
     return new Promise((resolve) => {
         ffmpeg.ffprobe(filePath, (err, metadata) => {
@@ -47,8 +45,6 @@ async function getAudioInfo(filePath) {
         });
     });
 }
-
-// --- Download ---
 
 async function runYtDlp(args) {
     const ytdlpCommands = [
@@ -88,8 +84,6 @@ async function downloadTrack(url, outputPath) {
     }
     return false;
 }
-
-// --- Logica Mixing Avanzata ---
 
 function getTempoFilter(targetBPM, sourceBPM) {
     let ratio = targetBPM / sourceBPM;
@@ -184,11 +178,8 @@ async function createTransition(song1Path, song2Path, outputPath) {
     });
 }
 
-// --- Ricerca ---
-
 async function findVideo(originalQuery, type) {
     let query = originalQuery;
-    // First, find full video to get accurate title
     if (type !== 'full') {
         const fullVideo = await findVideo(originalQuery, 'full');
         if (fullVideo) {
@@ -204,8 +195,6 @@ async function findVideo(originalQuery, type) {
     candidates.sort((a, b) => b.views - a.views);
     return candidates[0];
 }
-
-// --- Handler ---
 
 let handler = async (m, { conn, text, usedPrefix, command }) => {
     if (!text) return m.reply(`『 ⚠️ 』- \`Uso:\`\n${usedPrefix}mashup *song1* + *song2*\n${usedPrefix}transition *song1* + *song2*`);
@@ -258,7 +247,6 @@ let handler = async (m, { conn, text, usedPrefix, command }) => {
             }, { quoted: m });
 
         } else {
-            // MASHUP
             m.reply(`『 🥁 』 *Studio Quality Mashup...*\n> Sync BPM, Reverb & Mastering in corso...`);
 
             const pFull1 = path.join(tmpDir, `full1_${time}.mp3`);
@@ -289,7 +277,7 @@ let handler = async (m, { conn, text, usedPrefix, command }) => {
                 if (!full1) throw new Error(`Track completo non trovato per "${q1}"`);
                 await downloadTrack(full1.url, pFull1);
                 await approximateVocals(pFull1, approxV1);
-                rV1 = full1; // Use full metadata, but path is approx
+                rV1 = full1;
             }
 
             let rI1 = await findVideo(q1, 'instrumental');
@@ -325,8 +313,6 @@ let handler = async (m, { conn, text, usedPrefix, command }) => {
             if (warnings.length > 0) {
                 m.reply(`『 ⚠️ 』 Avvisi:\n${warnings.join('\n')}`);
             }
-
-            // Download paths
             const actualPV1 = isApproxV1 ? approxV1 : pV1;
             const actualPI1 = isApproxI1 ? approxI1 : pI1;
             const actualPV2 = isApproxV2 ? approxV2 : pV2;

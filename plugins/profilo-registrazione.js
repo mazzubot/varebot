@@ -1,29 +1,6 @@
 import { createHash } from 'crypto';
-
-function getRelativeTime(timestamp) {
-    const now = Date.now();
-    const diff = now - timestamp;
-    const seconds = Math.floor(diff / 1000);
-    const minutes = Math.floor(seconds / 60);
-    const hours = Math.floor(minutes / 60);
-    const days = Math.floor(hours / 24);
-    const months = Math.floor(days / 30);
-    const years = Math.floor(months / 12);
-
-    if (years > 0) return `${years} anno${years > 1 ? 'i' : ''} fa`;
-    if (months > 0) return `${months} mese${months > 1 ? 'i' : ''} fa`;
-    if (days > 0) return `${days} giorno${days > 1 ? 'i' : ''} fa`;
-    if (hours > 0) return `${hours} ora${hours > 1 ? 'e' : ''} fa`;
-    if (minutes > 0) return `${minutes} minuto${minutes > 1 ? 'i' : ''} fa`;
-    return 'pochi secondi fa';
-}
-function formatDate(date = new Date()) {
-    return new Intl.DateTimeFormat('it-IT', {
-        day: '2-digit',
-        month: '2-digit',
-        year: 'numeric'
-    }).format(date);
-}
+import moment from 'moment-timezone';
+moment.locale('it');
 
 let Reg = /^\s*([\w\s]+)[.| ]+(\d{1,3})\s*$/i;
 
@@ -41,13 +18,13 @@ let handler = async function (m, { conn, text, usedPrefix, command }) {
 
     let perfil = await conn.profilePictureUrl(target, 'image').catch(async _ => {
         const fallback = [
-            'https://i.ibb.co/YrWKV59/varebot-pfp.png',
+            'https://i.ibb.co/BKHtdBNp/default-avatar-profile-icon-1280x1280.jpg',
         ];
         return fallback[Math.floor(Math.random() * fallback.length)];
     });
 
     if (user.registered) {
-        const timeSinceReg = getRelativeTime(user.regTime);
+        const timeSinceReg = moment(user.regTime).fromNow();
         return conn.sendMessage(m.chat, {
             text: `『 ❌ 』- *${target === m.sender ? 'Sei' : 'Questo utente è'} già registrato!*\n『 📅 』 Registrazione: ${timeSinceReg}\n\n*Per resettare usa:* _${usedPrefix}unreg_`,
             contextInfo: {
@@ -97,7 +74,7 @@ let handler = async function (m, { conn, text, usedPrefix, command }) {
     await global.db.write();
 
     let sn = createHash('md5').update(target).digest('hex');
-    const registrationTime = formatDate();
+    const registrationTime = moment().format('DD/MM/YYYY');
 
     let regbot = `
 ㅤㅤ⋆｡˚『 ╭ \`REGISTRAZIONE\` ╯ 』˚｡⋆\n╭\n│

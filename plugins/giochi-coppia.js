@@ -5,7 +5,7 @@ import { renderToString } from 'react-dom/server'
 import path from 'path'
 
 const varebot = './media/menu/varebot.jpeg'
-const varebotpfp = 'https://i.ibb.co/YrWKV59/varebot-pfp.png'
+const varebotpfp = './media/varebot-pfp.png'
 
 const getBase64Image = (filePath, fallbackUrl) => {
     try {

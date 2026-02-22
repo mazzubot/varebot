@@ -5,11 +5,14 @@ import { join } from 'path'
 const MAX_AUDIO_SIZE = 25 * 1024 * 1024
 const POLL_INTERVAL_MS = 1000
 const MAX_POLLING_MS = 600000
-const OP_TIMEOUT_MS = 180000
-const ita = 'it'
-const lf = 0.6
+const OP_TIMEOUT_MS = 120000
+
+const PRIMARY_LANGUAGE_CODE = 'it'
+const LANGUAGE_FALLBACK_CONFIDENCE_THRESHOLD = 0.7
+
 const requestCache = new Map()
 const CACHE_TTL = 3600000
+
 function getCachedResult(key) {
   const cached = requestCache.get(key)
   if (cached && Date.now() - cached.timestamp < CACHE_TTL) return cached.result
@@ -35,15 +38,17 @@ function createTimeoutPromise(ms, message = '『 ❌ 』- Timeout raggiunto, rip
 
 function extractAudioMessage(m) {
   if (!m?.message) return null
+
   const viewOnce = m.message.viewOnceMessage?.message || m.message.viewOnceMessageV2?.message
   const msgObj = viewOnce || m.message
-  return msgObj.audioMessage || null
+
+  const audio = msgObj.audioMessage
+  return audio || null
 }
 
 function makeCacheKey(m) {
-  const sender = m?.sender || 'unknown'
-  const id = m?.key?.id || String(Date.now())
-  return `${sender}_${id}`
+  const base = m?.key?.id || String(Date.now())
+  return `${m.sender}_${base}`
 }
 
 async function downloadAudioBuffer(conn, m, audioMsg) {
@@ -52,15 +57,14 @@ async function downloadAudioBuffer(conn, m, audioMsg) {
       const mediaWrapper = { ...audioMsg }
       return await conn.downloadM(mediaWrapper, 'audio')
     }
-  } catch (e) {
-    console.error('Errore download diretto:', e)
+  } catch {
   }
+
   try {
     if (typeof m?.download === 'function') {
       return await m.download()
     }
-  } catch (e) {
-    console.error('Errore download helper:', e)
+  } catch {
   }
 
   return Buffer.alloc(0)
@@ -72,24 +76,18 @@ async function transcribeBufferWithAssemblyAI(buffer, mime, apiKey) {
 
   try {
     const extension = mime?.includes('ogg') || mime?.includes('opus') ? 'ogg' : 'mp3'
-    tempPath = join(process.cwd(), 'temp', `autotrascrizione_${Date.now()}_${Math.random().toString(36).substring(7)}.${extension}`)
+    tempPath = join(process.cwd(), 'temp', `autotrascrizione_${Date.now()}.${extension}`)
 
     const writeStream = createWriteStream(tempPath)
     writeStream.write(buffer)
     writeStream.end()
 
-    await new Promise((resolve, reject) => {
-      writeStream.on('finish', resolve)
-      writeStream.on('error', reject)
-    })
-
     let uploadResponse
     for (let attempt = 0; attempt < 3; attempt++) {
       try {
-        const fileStream = createReadStream(tempPath)
         uploadResponse = await axios.post(
           'https://api.assemblyai.com/v2/upload',
-          fileStream,
+          createReadStream(tempPath),
           {
             headers: {
               authorization: apiKey,
@@ -98,28 +96,27 @@ async function transcribeBufferWithAssemblyAI(buffer, mime, apiKey) {
             },
             maxContentLength: Infinity,
             maxBodyLength: Infinity,
-            timeout: Math.max(10000, OP_TIMEOUT_MS - (Date.now() - operationStartTime))
+            timeout: Math.max(5000, OP_TIMEOUT_MS - (Date.now() - operationStartTime))
           }
         )
         break
       } catch (e) {
-        if (attempt === 2) throw new Error("Errore durante l'upload del file ai server di trascrizione.")
-        await new Promise(r => setTimeout(r, 1500))
+        if (attempt === 2) throw new Error("Errore durante l'upload del file")
+        await new Promise(r => setTimeout(r, 1000))
       }
     }
+
     const createTranscript = async (forceItalian) => {
       const payload = {
         audio_url: uploadResponse.data.upload_url,
-        speech_model: 'best',
+        speed_boost: false,
         punctuate: true,
-        format_text: true,
-        disfluencies: false,
-        filter_profanity: false
+        format_text: true
       }
 
       if (forceItalian) {
         payload.language_detection = false
-        payload.language_code = ita
+        payload.language_code = PRIMARY_LANGUAGE_CODE
       } else {
         payload.language_detection = true
       }
@@ -132,67 +129,73 @@ async function transcribeBufferWithAssemblyAI(buffer, mime, apiKey) {
             authorization: apiKey,
             'content-type': 'application/json'
           },
-          timeout: 10000
+          timeout: Math.max(5000, OP_TIMEOUT_MS - (Date.now() - operationStartTime))
         }
       )
     }
+
     const pollTranscript = async (id) => {
       let transcriptResult
       const startTime = Date.now()
 
       while (Date.now() - startTime < MAX_POLLING_MS) {
-        if (Date.now() - operationStartTime >= OP_TIMEOUT_MS - 5000) {
-          throw new Error('Timeout operazione: il server ha impiegato troppo tempo.')
+        if (Date.now() - operationStartTime >= OP_TIMEOUT_MS - 2000) {
+          throw new Error('Timeout: operazione troppo lunga')
         }
 
-        try {
-          transcriptResult = await axios.get(
-            `https://api.assemblyai.com/v2/transcript/${id}`,
-            {
-              headers: { authorization: apiKey },
-              timeout: 5000
-            }
-          )
-        } catch (e) {
-            await new Promise(r => setTimeout(r, POLL_INTERVAL_MS))
-            continue;
+        transcriptResult = await axios.get(
+          `https://api.assemblyai.com/v2/transcript/${id}`,
+          {
+            headers: { authorization: apiKey },
+            timeout: Math.max(3000, OP_TIMEOUT_MS - (Date.now() - operationStartTime))
+          }
+        )
+
+        if (transcriptResult.data.status === 'completed') return transcriptResult.data
+
+        if (transcriptResult.data.status === 'error') {
+          throw new Error(transcriptResult.data.error || 'Errore durante la trascrizione')
         }
-
-        const status = transcriptResult.data.status
-
-        if (status === 'completed') return transcriptResult.data
-        if (status === 'error') throw new Error(transcriptResult.data.error || 'Errore elaborazione audio')
 
         await new Promise(r => setTimeout(r, POLL_INTERVAL_MS))
       }
-      throw new Error('Timeout polling trascrizione')
+
+      throw new Error('Timeout: trascrizione troppo lunga')
     }
+
     const firstTranscript = await createTranscript(false)
     let data = await pollTranscript(firstTranscript.data.id)
+
     const detectedLang = String(data.language_code || '').trim().toLowerCase()
     const confidence = Number(data.confidence || 0)
-    const isLangUnknown = !detectedLang || detectedLang === 'und'
-    const isConfidenceLow = confidence < lf
-    if ((isLangUnknown || isConfidenceLow) && detectedLang !== ita) {
+    const isLangUnknown = !detectedLang || detectedLang === 'und' || detectedLang === 'unknown'
+    const shouldFallbackToItalian = isLangUnknown || confidence < LANGUAGE_FALLBACK_CONFIDENCE_THRESHOLD
+
+    if (shouldFallbackToItalian) {
       const secondTranscript = await createTranscript(true)
       data = await pollTranscript(secondTranscript.data.id)
     }
 
+    const finalConfidence = Number(data.confidence || 0)
     const text = String(data.text || '').trim()
-    if (!text) throw new Error('Audio vuoto o non comprensibile.')
+    if (!text) throw new Error('Trascrizione vuota')
 
-    return { confidence: data.confidence, text }
-
+    return {
+      confidence: finalConfidence,
+      text
+    }
   } finally {
     if (tempPath) {
-      try { unlinkSync(tempPath) } catch {}
+      try {
+        unlinkSync(tempPath)
+      } catch {}
     }
   }
 }
 
 let handler = m => m
 
-handler.before = async function (m, { conn}) {
+handler.before = async function (m, { conn, isAdmin, isOwner, isSam }) {
   if (m.isBaileys && m.fromMe) return true
   if (!m.isGroup) return false
   if (!m.message) return true
@@ -202,46 +205,41 @@ handler.before = async function (m, { conn}) {
 
   const audioMsg = extractAudioMessage(m)
   if (!audioMsg) return true
-  if (audioMsg.seconds && audioMsg.seconds > 600) return true 
+
   const apiKey = global.APIKeys?.assemblyai
   if (!apiKey) return true
 
   const key = makeCacheKey(m)
   const cached = getCachedResult(key)
-    if (cached) {
+  if (cached) {
+    await conn.sendMessage(m.chat, { text: cached }, { quoted: m }).catch(() => {})
     return true
   }
-  setCachedResult(key, 'processing') 
 
   await conn.sendPresenceUpdate('composing', m.chat).catch(() => {})
   const composingInterval = setInterval(() => {
     conn.sendPresenceUpdate('composing', m.chat).catch(() => {})
-  }, 4500)
+  }, 5000)
 
   try {
     const operationPromise = (async () => {
       const buffer = await downloadAudioBuffer(conn, m, audioMsg)
-      
-      if (!buffer || buffer.length === 0) throw new Error('Impossibile scaricare l\'audio.')
-      if (buffer.length > MAX_AUDIO_SIZE) throw new Error('File audio troppo grande (Max 25MB).')
+      if (!buffer || buffer.length === 0) throw new Error('Download audio fallito')
+      if (buffer.length > MAX_AUDIO_SIZE) throw new Error('Audio troppo grande. Max 25MB')
 
       const mime = audioMsg.mimetype || 'audio/ogg'
       const result = await transcribeBufferWithAssemblyAI(buffer, mime, apiKey)
 
-      const response = `『 📝 』 \`Trascrizione:\`\n\n- ${result.text}`
+      const response = `『 📝 』 \`Trascrizione automatica:\`\n- ${result.text}`
       setCachedResult(key, response)
 
-      await conn.sendMessage(m.chat, { text: response, contextInfo: global.fake.contextInfo }, { quoted: m }).catch(() => {})
+      await conn.sendMessage(m.chat, { text: response }, { quoted: m }).catch(() => {})
     })()
 
     await Promise.race([operationPromise, createTimeoutPromise(OP_TIMEOUT_MS)])
   } catch (e) {
-    requestCache.delete(key)
-    const msg = (e && e.message) ? e.message : 'Errore sconosciuto trascrizione'
-    console.error(`Errore trascrizione ${m.chat}:`, e)
-    if (!msg.includes('Timeout')) {
-        await conn.sendMessage(m.chat, { text: `⚠️ ${msg}`, contextInfo: global.fake.contextInfo }, { quoted: m }).catch(() => {})
-    }
+    const msg = (e && e.message) ? e.message : 'Errore durante la trascrizione'
+    await conn.sendMessage(m.chat, { text: msg }, { quoted: m }).catch(() => {})
   } finally {
     clearInterval(composingInterval)
   }

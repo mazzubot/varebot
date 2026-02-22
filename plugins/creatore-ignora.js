@@ -83,7 +83,7 @@ let handler = async (m, { conn, args, usedPrefix, command }) => {
 }
 
 handler.help = ['ignora @user [durata]', 'unignora @user']
-handler.tags = ['creatore']
+handler.tags = ['owner']
 handler.command = /^(ignora|ignore|blockcmd|mutacmd|unignora|unignore|sblocca|unmutacmd)$/i
 handler.owner = true
 
