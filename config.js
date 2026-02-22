@@ -6,7 +6,7 @@ const pkg = JSON.parse(fs.readFileSync('./package.json', 'utf-8'))
 
 /*⭑⭒━━━✦❘༻☾⋆⁺₊✧ 𝓿𝓪𝓻𝓮𝓫𝓸𝓽 ✧₊⁺⋆☽༺❘✦━━━⭒⭑*/
 
-global.prefisso = '.'
+global.prefisso = '!'
 global.sam = ['393514357738',]
 global.owner = [
   ['393476686131', 'sam', true],
@@ -23,7 +23,7 @@ global.prems = ['393514357738', '393511082922', '212614769337']
 /*⭑⭒━━━✦❘༻🩸 INFO BOT 🕊️༺❘✦━━━⭒⭑*/
 
 global.nomepack = 'vare ✧ bot'
-global.nomebot = '✧˚🩸 varebot 🕊️˚✧'
+global.nomebot = '✧˚🩸 mazzubot 🕊️˚✧'
 global.wm = 'vare ✧ bot'
 global.autore = 'SⒶ𝔪'
 global.dev = '⋆｡˚- SⒶ𝔪'
